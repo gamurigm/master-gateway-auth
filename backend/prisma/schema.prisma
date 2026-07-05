@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Estado {
+  ACTIVO
+  INACTIVO
+}
+
+model User {
+  id           String         @id @default(uuid()) @db.Uuid
+  email        String         @unique
+  passwordHash String         @map("password_hash")
+  firstName    String         @map("nombres")
+  lastName     String?        @map("apellidos")
+  estado       Estado         @default(ACTIVO)
+  createdAt    DateTime       @default(now()) @map("fecha_creacion")
+  updatedAt    DateTime       @updatedAt @map("fecha_actualizacion")
+  createdBy    String?        @map("creado_por") @db.Uuid
+  updatedBy    String?        @map("actualizado_por") @db.Uuid
+  roles        UserRole[]
+  refreshTokens RefreshToken[]
+
+  @@map("usuarios")
+}
+
+model Role {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @unique @map("nombre")
+  description String?      @map("descripcion")
+  estado      Estado       @default(ACTIVO)
+  createdAt   DateTime     @default(now()) @map("fecha_creacion")
+  updatedAt   DateTime     @updatedAt @map("fecha_actualizacion")
+  createdBy   String?      @map("creado_por") @db.Uuid
+  updatedBy   String?      @map("actualizado_por") @db.Uuid
+  users       UserRole[]
+  modules     RoleModule[]
+  menus       RoleMenu[]
+  refreshTokens RefreshToken[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("usuario_id") @db.Uuid
+  roleId    String   @map("rol_id") @db.Uuid
+  estado    Estado   @default(ACTIVO)
+  createdAt DateTime @default(now()) @map("fecha_creacion")
+  updatedAt DateTime @updatedAt @map("fecha_actualizacion")
+  createdBy String?  @map("creado_por") @db.Uuid
+  updatedBy String?  @map("actualizado_por") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id])
+  role      Role     @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+  @@map("usuario_roles")
+}
+
+model SystemModule {
+  id          String       @id @default(uuid()) @db.Uuid
+  code        String       @unique @map("codigo")
+  name        String       @map("nombre")
+  description String?      @map("descripcion")
+  estado      Estado       @default(ACTIVO)
+  createdAt   DateTime     @default(now()) @map("fecha_creacion")
+  updatedAt   DateTime     @updatedAt @map("fecha_actualizacion")
+  createdBy   String?      @map("creado_por") @db.Uuid
+  updatedBy   String?      @map("actualizado_por") @db.Uuid
+  menus       Menu[]
+  roles       RoleModule[]
+
+  @@map("modulos")
+}
+
+model RoleModule {
+  id        String       @id @default(uuid()) @db.Uuid
+  roleId    String       @map("rol_id") @db.Uuid
+  moduleId  String       @map("modulo_id") @db.Uuid
+  estado    Estado       @default(ACTIVO)
+  createdAt DateTime     @default(now()) @map("fecha_creacion")
+  updatedAt DateTime     @updatedAt @map("fecha_actualizacion")
+  createdBy String?      @map("creado_por") @db.Uuid
+  updatedBy String?      @map("actualizado_por") @db.Uuid
+  role      Role         @relation(fields: [roleId], references: [id])
+  module    SystemModule @relation(fields: [moduleId], references: [id])
+
+  @@unique([roleId, moduleId])
+  @@map("rol_modulos")
+}
+
+model Menu {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String       @map("nombre")
+  url       String?
+  icon      String?      @map("icono")
+  order     Int          @default(0) @map("orden")
+  moduleId  String       @map("modulo_id") @db.Uuid
+  parentId  String?      @map("parent_id") @db.Uuid
+  estado    Estado       @default(ACTIVO)
+  createdAt DateTime     @default(now()) @map("fecha_creacion")
+  updatedAt DateTime     @updatedAt @map("fecha_actualizacion")
+  createdBy String?      @map("creado_por") @db.Uuid
+  updatedBy String?      @map("actualizado_por") @db.Uuid
+  module    SystemModule @relation(fields: [moduleId], references: [id])
+  parent    Menu?        @relation("MenuTree", fields: [parentId], references: [id])
+  children  Menu[]       @relation("MenuTree")
+  roles     RoleMenu[]
+
+  @@index([parentId])
+  @@index([moduleId])
+  @@map("menus")
+}
+
+model RoleMenu {
+  id        String   @id @default(uuid()) @db.Uuid
+  roleId    String   @map("rol_id") @db.Uuid
+  menuId    String   @map("menu_id") @db.Uuid
+  estado    Estado   @default(ACTIVO)
+  createdAt DateTime @default(now()) @map("fecha_creacion")
+  updatedAt DateTime @updatedAt @map("fecha_actualizacion")
+  createdBy String?  @map("creado_por") @db.Uuid
+  updatedBy String?  @map("actualizado_por") @db.Uuid
+  role      Role     @relation(fields: [roleId], references: [id])
+  menu      Menu     @relation(fields: [menuId], references: [id])
+
+  @@unique([roleId, menuId])
+  @@map("rol_menus")
+}
+
+model RefreshToken {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @map("usuario_id") @db.Uuid
+  roleId                String    @map("rol_id") @db.Uuid
+  jti                   String    @unique
+  tokenHash             String    @map("token_hash")
+  expiresAt             DateTime  @map("expira_en")
+  revokedAt             DateTime? @map("revocado_en")
+  replacedByJti         String?   @map("reemplazado_por_jti")
+  reuseDetected         Boolean   @default(false) @map("reutilizacion_detectada")
+  estado                Estado    @default(ACTIVO)
+  createdAt             DateTime  @default(now()) @map("fecha_creacion")
+  updatedAt             DateTime  @updatedAt @map("fecha_actualizacion")
+  createdBy             String?   @map("creado_por") @db.Uuid
+  updatedBy             String?   @map("actualizado_por") @db.Uuid
+  user                  User      @relation(fields: [userId], references: [id])
+  role                  Role      @relation(fields: [roleId], references: [id])
+
+  @@index([userId])
+  @@index([roleId])
+  @@map("refresh_tokens")
+}
