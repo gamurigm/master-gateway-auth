@@ -17,6 +17,89 @@ services:
       timeout: 5s
       retries: 5
 
+  kong-db:
+    image: postgres:16-alpine
+    container_name: kong-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kong
+      POSTGRES_DB: kong
+      POSTGRES_PASSWORD: kong
+    ports:
+      - "5443:5432"
+    volumes:
+      - kong-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kong -d kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kong-migrations:
+    image: kong:3.8
+    container_name: kong-migrations
+    depends_on:
+      kong-db:
+        condition: service_healthy
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-db
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong
+      KONG_PG_DATABASE: kong
+    command: kong migrations bootstrap
+
+  kong:
+    image: kong:3.8
+    container_name: kong-api-gateway
+    restart: unless-stopped
+    depends_on:
+      kong-db:
+        condition: service_healthy
+      kong-migrations:
+        condition: service_completed_successfully
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-db
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong
+      KONG_PG_DATABASE: kong
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+    ports:
+      - "8000:8000"   # Kong Proxy (público)
+      - "8443:8443"   # Kong Proxy HTTPS
+      - "8001:8001"   # Kong Admin API
+      - "8444:8444"   # Kong Admin API HTTPS
+    healthcheck:
+      test: ["CMD-SHELL", "kong health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  konga:
+    image: pantsel/konga:latest
+    container_name: konga
+    restart: unless-stopped
+    depends_on:
+      kong:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DB_ADAPTER: postgres
+      DB_HOST: kong-db
+      DB_PORT: 5432
+      DB_USER: kong
+      DB_PASSWORD: kong
+      DB_DATABASE: kong
+      KONGA_HOOK_TIMEOUT: 120000
+    ports:
+      - "1337:1337"   # Konga UI
+
   backend:
     build:
       context: .
@@ -51,6 +134,26 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+  register-backend:
+    image: node:24.15.0-bookworm-slim
+    container_name: master-gateway-register-backend
+    depends_on:
+      kong:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./scripts:/scripts
+    working_dir: /scripts
+    environment:
+      KONG_ADMIN_URL: http://kong:8001
+      KONG_SERVICE_NAME: master-gateway
+      KONG_SERVICE_URL: http://backend:3000
+      KONG_ROUTE_PATHS: /api
+      KONG_WAIT_TIME: 15
+    command: ["node", "auto-register-kong.js"]
+    restart: "no"  # Solo se ejecuta una vez
 
   frontend:
     build:
@@ -89,6 +192,26 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+
+  register-ventas:
+    image: node:24.15.0-bookworm-slim
+    container_name: master-gateway-register-ventas
+    depends_on:
+      kong:
+        condition: service_healthy
+      ventas:
+        condition: service_healthy
+    volumes:
+      - ./scripts:/scripts
+    working_dir: /scripts
+    environment:
+      KONG_ADMIN_URL: http://kong:8001
+      KONG_SERVICE_NAME: ventas-service
+      KONG_SERVICE_URL: http://ventas:3006
+      KONG_ROUTE_PATHS: /ventas,/health
+      KONG_WAIT_TIME: 15
+    command: ["node", "auto-register-kong.js"]
+    restart: "no"  # Solo se ejecuta una vez
 
   sonar-db:
     image: postgres:16-alpine
@@ -153,6 +276,7 @@ services:
 
 volumes:
   postgres-data:
+  kong-postgres-data:
   sonar-postgresql:
   sonar-postgresql-data:
   sonarqube-data:

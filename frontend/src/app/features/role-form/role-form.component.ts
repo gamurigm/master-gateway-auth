@@ -53,10 +53,14 @@ export class RoleFormComponent implements OnInit {
   private readonly rolesService = inject(RolesService);
 
   @Input() role: Role | null = null;
-  @Output() close = new EventEmitter<void>();
+  @Output() closed = new EventEmitter<void>();
   @Output() saved = new EventEmitter<void>();
 
   isEdit = false;
+
+  close() {
+    this.closed.emit();
+  }
   saving = false;
   error = '';
   dto: CreateRoleDto & Partial<UpdateRoleDto> = { name: '', description: '' };

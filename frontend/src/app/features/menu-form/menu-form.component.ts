@@ -80,10 +80,14 @@ export class MenuFormComponent implements OnInit {
   private readonly modulesService = inject(ModulesService);
 
   @Input() menu: Menu | null = null;
-  @Output() close = new EventEmitter<void>();
+  @Output() closed = new EventEmitter<void>();
   @Output() saved = new EventEmitter<void>();
 
   isEdit = false;
+
+  close() {
+    this.closed.emit();
+  }
   saving = false;
   error = '';
   modules: SystemModule[] = [];

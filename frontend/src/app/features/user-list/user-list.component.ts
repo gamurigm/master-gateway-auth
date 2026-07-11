@@ -62,7 +62,7 @@ import { UserFormComponent } from '../user-form/user-form.component';
     <app-user-form
       *ngIf="showForm"
       [user]="selectedUser"
-      (close)="closeForm()"
+      (closed)="closeForm()"
       (saved)="onSaved()"
     />
   `,

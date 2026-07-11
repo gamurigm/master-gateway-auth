@@ -75,7 +75,7 @@ Todas las tablas deben incluir campos comunes:
 - `creado_por`: UUID nullable.
 - `actualizado_por`: UUID nullable.
 
-Tablas principales:dale )revisa e
+Tablas principales:dale )revisa esi tod
 
 - `usuarios`
 
