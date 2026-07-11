@@ -67,7 +67,7 @@ import { AuthService } from '../../core/auth.service';
       }
 
       .role-option strong {
-        font-size: 16px;
+        font-size: 16px;  
         color: var(--text-main);
       }
 
