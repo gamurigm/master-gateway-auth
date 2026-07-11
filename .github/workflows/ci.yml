@@ -11,6 +11,7 @@ on:
       - dev
       - test
       - main
+      - agent/sincroniza-dev-test
 
 jobs:
   build-test:
@@ -268,7 +269,7 @@ jobs:
         run: docker compose down sonar-db sonarqube
 
   telegram-notify-dev-test:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/test')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/test' || github.ref == 'refs/heads/agent/sincroniza-dev-test')
     needs:
       - build-test
       - codebert-sast
