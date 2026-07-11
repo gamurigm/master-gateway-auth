@@ -61,10 +61,14 @@ export class UserFormComponent implements OnInit {
   private readonly usersService = inject(UsersService);
 
   @Input() user: User | null = null;
-  @Output() close = new EventEmitter<void>();
+  @Output() closed = new EventEmitter<void>();
   @Output() saved = new EventEmitter<void>();
 
   isEdit = false;
+
+  close() {
+    this.closed.emit();
+  }
   saving = false;
   error = '';
   dto: CreateUserDto & Partial<UpdateUserDto> = {

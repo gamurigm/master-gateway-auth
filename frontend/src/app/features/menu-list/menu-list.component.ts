@@ -57,7 +57,7 @@ import { MenuFormComponent } from '../menu-form/menu-form.component';
     <app-menu-form
       *ngIf="showForm"
       [menu]="selectedMenu"
-      (close)="closeForm()"
+      (closed)="closeForm()"
       (saved)="onSaved()"
     />
   `,
