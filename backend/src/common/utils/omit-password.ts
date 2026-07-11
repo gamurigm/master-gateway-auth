@@ -4,6 +4,8 @@ type EntityWithPassword = {
 };
 
 export function omitPassword<T extends EntityWithPassword>(entity: T) {
-  const { passwordHash: _passwordHash, ...safeEntity } = entity;
+  const safeEntity = { ...entity };
+  delete safeEntity.passwordHash;
+
   return safeEntity;
 }

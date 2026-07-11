@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Estado } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateModuleDto } from './dto/create-module.dto';
@@ -29,7 +33,9 @@ export class ModulesService {
   }
 
   async create(dto: CreateModuleDto, actorId: string) {
-    const existing = await this.prisma.systemModule.findUnique({ where: { code: dto.code } });
+    const existing = await this.prisma.systemModule.findUnique({
+      where: { code: dto.code },
+    });
     if (existing) {
       throw new ConflictException('El codigo de modulo ya existe');
     }
@@ -58,7 +64,9 @@ export class ModulesService {
   }
 
   private async ensureActive(id: string) {
-    const module = await this.prisma.systemModule.findFirst({ where: { id, estado: Estado.ACTIVO } });
+    const module = await this.prisma.systemModule.findFirst({
+      where: { id, estado: Estado.ACTIVO },
+    });
     if (!module) {
       throw new NotFoundException('Modulo no encontrado');
     }

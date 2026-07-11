@@ -1,0 +1,273 @@
+name: CI/CD
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - dev
+      - test
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/master_gateway?schema=public
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate --schema backend/prisma/schema.prisma
+
+      - name: Backend build
+        run: npm run build:backend
+
+      - name: Backend unit tests
+        run: npm run test -w backend -- --runInBand
+
+      - name: Backend e2e tests
+        run: npm run test:e2e -w backend -- --runInBand
+
+      - name: Ventas build
+        run: npm run build -w ventas
+
+      - name: Ventas tests
+        run: npm run test -w ventas
+
+      - name: Frontend type check
+        run: npm run lint -w frontend
+
+      - name: Frontend build
+        run: npm run build:frontend
+
+  codebert-sast:
+    needs: build-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CODEBERT_MODEL: mahdin70/CodeBERT-PrimeVul-BigVul
+      CODEBERT_THRESHOLD: "0.999"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore Hugging Face cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: codebert-${{ runner.os }}-${{ hashFiles('security/codebert-sast/requirements.txt') }}
+          restore-keys: |
+            codebert-${{ runner.os }}-
+
+      - name: Prepare changed files
+        shell: bash
+        run: |
+          mkdir -p reports .cache/huggingface
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}"
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > reports/codebert-changed-files-all.txt
+            grep -E '\.(c|cc|cpp|cxx|h|hpp|java|js|jsx|py|rs|ts|tsx)$' reports/codebert-changed-files-all.txt > reports/codebert-changed-files.txt || true
+          else
+            find backend/src frontend/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files.txt
+          fi
+          cat reports/codebert-changed-files.txt
+
+      - name: Build CodeBERT SAST image
+        run: docker build -f security/codebert-sast/Dockerfile -t master-gateway-codebert-sast .
+
+      - name: Run CodeBERT SAST gate
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -v "$PWD/.cache/huggingface:/cache/huggingface" \
+            -e HF_HOME=/cache/huggingface \
+            -e CODEBERT_MODEL="$CODEBERT_MODEL" \
+            -e CODEBERT_THRESHOLD="$CODEBERT_THRESHOLD" \
+            master-gateway-codebert-sast \
+            --changed-files reports/codebert-changed-files.txt \
+            --report reports/codebert-sast.json \
+            --warn-only
+
+      - name: Upload CodeBERT report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codebert-sast-report
+          path: |
+            reports/codebert-sast.json
+            reports/codebert-changed-files.txt
+
+  sonarqube:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - build-test
+      - codebert-sast
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/master_gateway?schema=public
+      SONAR_HOST_URL: http://localhost:9000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Backend coverage
+        run: npm run test:coverage
+
+      - name: Start SonarQube Community
+        run: |
+          docker compose up -d sonar-db sonarqube
+          echo "Waiting for SonarQube to be ready..."
+          for i in $(seq 1 60); do
+            STATUS=$(curl -s -f "http://localhost:9000/api/system/status" 2>/dev/null | jq -r '.status' 2>/dev/null || echo "DOWN")
+            if [ "$STATUS" = "UP" ]; then
+              echo "SonarQube is ready!"
+              break
+            fi
+            echo "Attempt $i: status=$STATUS, waiting 10s..."
+            sleep 10
+          done
+
+      - name: Generate SonarQube token
+        run: |
+          TOKEN=$(curl -s -u admin:admin -X POST "http://localhost:9000/api/user_tokens/generate" \
+            -d "name=ci-$(date +%s)" | jq -r '.token')
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "::error::Failed to generate SonarQube token"
+            docker compose logs sonarqube --tail=20
+            exit 1
+          fi
+          echo "SONAR_TOKEN=$TOKEN" >> $GITHUB_ENV
+
+      - name: SonarQube analysis
+        run: npm run sonar:scan -- -Dsonar.login=${{ env.SONAR_TOKEN }}
+
+      - name: Stop SonarQube
+        if: always()
+        run: docker compose down sonar-db sonarqube
+
+  telegram-notify-main:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && always()
+    needs:
+      - build-test
+      - codebert-sast
+      - sonarqube
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job status
+        id: status
+        run: |
+          if [ "${{ needs.build-test.result }}" = "success" ] && \
+             [ "${{ needs.codebert-sast.result }}" = "success" ] && \
+             [ "${{ needs.sonarqube.result }}" = "success" ]; then
+            echo "status=✅ Pipeline exitoso" >> $GITHUB_OUTPUT
+            echo "emoji=🟢" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ Pipeline fallido" >> $GITHUB_OUTPUT
+            echo "emoji=🔴" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ${{ steps.status.outputs.emoji }} Master Gateway — ${{ steps.status.outputs.status }}
+
+            Rama: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Autor: ${{ github.actor }}
+
+            Build/Test: ${{ needs.build-test.result }}
+            CodeBERT SAST: ${{ needs.codebert-sast.result }}
+            SonarQube: ${{ needs.sonarqube.result }}
+
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  telegram-notify-merge:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/test') && always()
+    needs:
+      - build-test
+      - codebert-sast
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job status
+        id: status
+        run: |
+          if [ "${{ needs.build-test.result }}" = "success" ]; then
+            echo "status=✅ Merge exitoso a ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ Merge fallido a ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ${{ steps.status.outputs.emoji }} Master Gateway — ${{ steps.status.outputs.status }}
+
+            Rama: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Autor: ${{ github.actor }}
+
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.sonarqube.result == 'success'
+    needs:
+      - build-test
+      - codebert-sast
+      - sonarqube
+      - telegram-notify-main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Render
+        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+
+      - name: Notify deploy result
+        if: success()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            🚀 Master Gateway desplegado en Render exitosamente
+
+            Commit: ${{ github.sha }}
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

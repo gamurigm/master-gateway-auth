@@ -7,4 +7,3 @@ export class SelectRoleDto {
   @IsUUID()
   roleId!: string;
 }
-

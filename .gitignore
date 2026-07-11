@@ -8,4 +8,8 @@ coverage/
 .env.*.local
 *.log
 tmp/pdfs/
+reports/*.json
+reports/codebert-changed-files.txt
+.cache/huggingface/
+__pycache__/
 

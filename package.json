@@ -1,21 +1,36 @@
 {
-  "name": "master-gateway-workspace",
-  "version": "0.1.0",
-  "private": true,
-  "workspaces": [
-    "backend",
-    "frontend"
-  ],
-  "scripts": {
-    "dev:backend": "npm run start:dev -w backend",
-    "dev:frontend": "npm start -w frontend",
-    "build": "npm run build -w backend && npm run build -w frontend",
-    "build:backend": "npm run build -w backend",
-    "build:frontend": "npm run build -w frontend",
-    "lint": "npm run lint -w backend && npm run lint -w frontend",
-    "test": "npm run test -w backend",
-    "prisma:generate": "npm run prisma:generate -w backend",
-    "prisma:migrate": "npm run prisma:migrate -w backend",
-    "prisma:seed": "npm run prisma:seed -w backend"
-  }
+    "name": "master-gateway-workspace",
+    "version": "0.1.0",
+    "private": true,
+    "workspaces": [
+        "backend",
+        "frontend",
+        "services/ventas"
+    ],
+    "engines": {
+        "node": "^22.22.3 || ^24.15.0 || >=26.0.0",
+        "npm": ">=8.0.0"
+    },
+    "scripts": {
+        "dev:backend": "npm run start:dev -w backend",
+        "dev:frontend": "npm start -w frontend",
+        "dev:ventas": "npm run dev -w ventas",
+        "build": "npm run build -w backend && npm run build -w frontend && npm run build -w ventas",
+        "build:backend": "npm run build -w backend",
+        "build:frontend": "npm run build -w frontend",
+        "build:ventas": "npm run build -w ventas",
+        "lint": "npm run lint -w backend && npm run lint -w frontend && npm run lint -w ventas",
+        "test": "npm run test -w backend && npm run test -w ventas",
+        "test:backend": "npm run test -w backend",
+        "test:ventas": "npm run test -w ventas",
+        "test:coverage": "npm run test:cov -w backend -- --runInBand",
+        "sonar:scan": "sonar-scanner",
+        "prisma:validate": "node -e \"process.env.DATABASE_URL ||= 'postgresql://postgres:postgres@localhost:5442/master_gateway?schema=public'; require('node:child_process').execSync('npx prisma validate --schema backend/prisma/schema.prisma', { stdio: 'inherit', env: process.env, shell: true });\"",
+        "prisma:generate": "npm run prisma:generate -w backend",
+        "prisma:migrate": "npm run prisma:migrate -w backend",
+        "prisma:seed": "npm run prisma:seed -w backend"
+    },
+    "devDependencies": {
+        "@sonar/scan": "^4.3.8"
+    }
 }

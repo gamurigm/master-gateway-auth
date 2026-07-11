@@ -7,4 +7,3 @@ import { RolesService } from './roles.service';
   providers: [RolesService],
 })
 export class RolesModule {}
-

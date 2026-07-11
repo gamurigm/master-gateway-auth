@@ -1,6 +1,14 @@
-import { Body, Controller, Headers, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  Post,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../common/auth/current-user.decorator';
-import { AuthenticatedUser } from '../common/auth/authenticated-user';
+import type { AuthenticatedUser } from '../common/auth/authenticated-user';
 import { JwtAuthGuard } from '../common/auth/jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -12,16 +20,19 @@ import { ValidateTokenDto } from './dto/validate-token.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Throttle({ default: { limit: 5, ttl: 60_000, blockDuration: 300_000 } })
   @Post('auth/login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60_000, blockDuration: 120_000 } })
   @Post('auth/select-role')
   selectRole(@Body() dto: SelectRoleDto) {
     return this.authService.selectRole(dto);
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60_000, blockDuration: 120_000 } })
   @Post('auth/refresh-token')
   refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refresh(dto.refreshToken);
@@ -29,7 +40,10 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('auth/logout')
-  logout(@CurrentUser() user: AuthenticatedUser | undefined, @Body() dto: RefreshTokenDto) {
+  logout(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Body() dto: RefreshTokenDto,
+  ) {
     if (!user) {
       throw new UnauthorizedException('Token requerido');
     }
@@ -38,8 +52,11 @@ export class AuthController {
   }
 
   @Post('internals/validate-token')
-  validateToken(@Headers('x-internal-api-key') apiKey: string | undefined, @Body() dto: ValidateTokenDto) {
-    return this.authService.validateInternal(apiKey, dto.token);
+  validateToken(
+    @Headers('x-internal-api-key') apiKey: string | undefined,
+    @Headers('x-internal-service') serviceName: string | undefined,
+    @Body() dto: ValidateTokenDto,
+  ) {
+    return this.authService.validateInternal(apiKey, dto.token, serviceName);
   }
 }
-

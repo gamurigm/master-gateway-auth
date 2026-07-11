@@ -15,4 +15,3 @@ export class PaginationQueryDto {
   @Max(100)
   limit = 20;
 }
-

@@ -4,4 +4,3 @@ export class ValidateTokenDto {
   @IsString()
   token!: string;
 }
-

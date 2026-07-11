@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: master_gateway
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5442}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -17,6 +17,145 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: master-gateway-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/master_gateway?schema=public
+      FRONTEND_ORIGIN: http://localhost:4200
+      JWT_ISSUER: master-gateway
+      JWT_AUDIENCE: master-gateway-clients
+      JWT_SECRET: local-docker-access-secret
+      JWT_EXPIRES_IN: 15m
+      TEMP_JWT_SECRET: local-docker-temp-secret
+      TEMP_JWT_EXPIRES_IN: 5m
+      REFRESH_JWT_SECRET: local-docker-refresh-secret
+      REFRESH_JWT_EXPIRES_IN: 7d
+      INTERNAL_API_KEY: local-docker-internal-key
+      INTERNAL_ALLOWED_SERVICES: ventas
+      SEED_ADMIN_EMAIL: admin@example.com
+      SEED_ADMIN_PASSWORD: Admin12345!
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: master-gateway-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-4200}:80"
+
+  ventas:
+    build:
+      context: .
+      dockerfile: services/ventas/Dockerfile
+    container_name: master-gateway-ventas
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      VENTAS_PORT: 3006
+      MASTER_VALIDATE_URL: http://backend:3000/api/internals/validate-token
+      MASTER_INTERNAL_API_KEY: local-docker-internal-key
+      MASTER_INTERNAL_SERVICE_NAME: ventas
+      VENTAS_ALLOWED_ROLES: ADMIN,VENTAS
+      MASTER_VALIDATE_RETRY_ATTEMPTS: 3
+      MASTER_VALIDATE_RETRY_DELAY_MS: 500
+    ports:
+      - "${VENTAS_PORT:-3006}:3006"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3006/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  sonar-db:
+    image: postgres:16-alpine
+    container_name: master-gateway-sonar-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: sonar
+      POSTGRES_DB: sonar
+    volumes:
+      - sonar-postgresql:/var/lib/postgresql
+      - sonar-postgresql-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar -d sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: master-gateway-sonarqube
+    restart: unless-stopped
+    depends_on:
+      sonar-db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonar
+    ports:
+      - "${SONARQUBE_PORT:-9000}:9000"
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+      - sonarqube-logs:/opt/sonarqube/logs
+
+  codebert-sast:
+    profiles:
+      - security
+    build:
+      context: .
+      dockerfile: security/codebert-sast/Dockerfile
+    image: master-gateway-codebert-sast:local
+    working_dir: /workspace
+    environment:
+      CODEBERT_MODEL: ${CODEBERT_MODEL:-mahdin70/CodeBERT-PrimeVul-BigVul}
+      CODEBERT_THRESHOLD: ${CODEBERT_THRESHOLD:-0.999}
+      HF_HOME: /cache/huggingface
+      TRANSFORMERS_CACHE: /cache/huggingface
+    volumes:
+      - .:/workspace
+      - codebert-cache:/cache/huggingface
+    command:
+      - --path
+      - backend/src
+      - --path
+      - frontend/src
+      - --path
+      - services
+      - --report
+      - reports/codebert-sast.json
+
 volumes:
   postgres-data:
-
+  sonar-postgresql:
+  sonar-postgresql-data:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonarqube-logs:
+  codebert-cache:

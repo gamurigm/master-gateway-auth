@@ -1,4 +1,10 @@
-import { IsEmail, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -8,7 +14,8 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/, {
-    message: 'La contrasena debe tener al menos 8 caracteres, mayuscula, minuscula y numero',
+    message:
+      'La contrasena debe tener al menos 8 caracteres, mayuscula, minuscula y numero',
   })
   password?: string;
 
@@ -22,4 +29,3 @@ export class UpdateUserDto {
   @MaxLength(100)
   lastName?: string;
 }
-

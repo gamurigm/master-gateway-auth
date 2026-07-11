@@ -4,4 +4,3 @@ export class AssignUserDto {
   @IsUUID()
   userId!: string;
 }
-

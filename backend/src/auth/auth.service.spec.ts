@@ -1,0 +1,288 @@
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { Estado } from '@prisma/client';
+import * as argon2 from 'argon2';
+import { PrismaService } from '../prisma/prisma.service';
+import { AuthService } from './auth.service';
+
+const USER_ID = '11111111-1111-1111-1111-111111111111';
+const ROLE_ID = '22222222-2222-2222-2222-222222222222';
+const EMAIL = 'admin@example.com';
+const PASSWORD = 'Admin12345!';
+
+type TempTokenPayload = {
+  sub: string;
+  email: string;
+};
+
+type AccessTokenPayload = {
+  sub: string;
+  roleId: string;
+  roleName: string;
+};
+
+type RefreshTokenCreateArgs = {
+  data: { userId: string; roleId: string; createdBy: string };
+};
+
+type RefreshTokenUpdateArgs = {
+  where: { id: string };
+  data: { replacedByJti: string; estado: Estado };
+};
+
+type RefreshTokenUpdateManyArgs = {
+  where: { userId: string; roleId: string; estado: Estado };
+  data: { reuseDetected: boolean; estado: Estado };
+};
+
+const configValues: Record<string, string> = {
+  JWT_SECRET: 'test-access-secret',
+  JWT_EXPIRES_IN: '15m',
+  JWT_ISSUER: 'master-gateway',
+  JWT_AUDIENCE: 'master-gateway-clients',
+  TEMP_JWT_SECRET: 'test-temp-secret',
+  TEMP_JWT_EXPIRES_IN: '5m',
+  REFRESH_JWT_SECRET: 'test-refresh-secret',
+  REFRESH_JWT_EXPIRES_IN: '7d',
+  INTERNAL_API_KEY: 'test-internal-key',
+  INTERNAL_ALLOWED_SERVICES: 'ventas',
+};
+
+describe('AuthService', () => {
+  let service: AuthService;
+  let jwtService: JwtService;
+  let passwordHash: string;
+
+  const prisma = {
+    user: {
+      findFirst: jest.fn(),
+    },
+    userRole: {
+      findFirst: jest.fn(),
+    },
+    refreshToken: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+  };
+
+  const configService = {
+    get: jest.fn((key: string) => configValues[key]),
+  } as unknown as ConfigService;
+
+  beforeAll(async () => {
+    passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jwtService = new JwtService();
+    service = new AuthService(
+      prisma as unknown as PrismaService,
+      jwtService,
+      configService,
+    );
+    prisma.refreshToken.create.mockResolvedValue({});
+    prisma.refreshToken.update.mockResolvedValue({});
+    prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('login returns a temp token, active roles, and no password hash', async () => {
+    prisma.user.findFirst.mockResolvedValue({
+      id: USER_ID,
+      email: EMAIL,
+      passwordHash,
+      firstName: 'Admin',
+      lastName: 'Master',
+      roles: [
+        {
+          role: {
+            id: ROLE_ID,
+            name: 'ADMIN',
+            description: 'Administrador',
+          },
+        },
+      ],
+    });
+
+    const result = await service.login({ email: EMAIL, password: PASSWORD });
+    const tempPayload = await jwtService.verifyAsync<TempTokenPayload>(
+      result.tempToken,
+      {
+        secret: configValues['TEMP_JWT_SECRET'],
+        issuer: configValues['JWT_ISSUER'],
+        audience: configValues['JWT_AUDIENCE'],
+      },
+    );
+
+    expect(tempPayload).toMatchObject({ sub: USER_ID, email: EMAIL });
+    expect(result.roles).toEqual([
+      { id: ROLE_ID, name: 'ADMIN', description: 'Administrador' },
+    ]);
+    expect(result.user).not.toHaveProperty('passwordHash');
+  });
+
+  it('login rejects invalid credentials with a generic unauthorized error', async () => {
+    prisma.user.findFirst.mockResolvedValue({
+      id: USER_ID,
+      email: EMAIL,
+      passwordHash,
+      roles: [],
+    });
+
+    await expect(
+      service.login({ email: EMAIL, password: 'Wrong12345!' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('selectRole issues access and refresh tokens for an assigned role', async () => {
+    const tempToken = await jwtService.signAsync(
+      { sub: USER_ID, email: EMAIL },
+      {
+        secret: configValues['TEMP_JWT_SECRET'],
+        issuer: configValues['JWT_ISSUER'],
+        audience: configValues['JWT_AUDIENCE'],
+        expiresIn: '5m',
+      },
+    );
+    prisma.userRole.findFirst.mockResolvedValue({
+      role: {
+        id: ROLE_ID,
+        name: 'ADMIN',
+      },
+    });
+
+    const result = await service.selectRole({ tempToken, roleId: ROLE_ID });
+    const accessPayload = await jwtService.verifyAsync<AccessTokenPayload>(
+      result.accessToken,
+      {
+        secret: configValues['JWT_SECRET'],
+        issuer: configValues['JWT_ISSUER'],
+        audience: configValues['JWT_AUDIENCE'],
+      },
+    );
+
+    expect(accessPayload).toMatchObject({
+      sub: USER_ID,
+      roleId: ROLE_ID,
+      roleName: 'ADMIN',
+    });
+    expect(result.role).toEqual({ id: ROLE_ID, name: 'ADMIN' });
+    const createMock = prisma.refreshToken.create as jest.Mock<
+      unknown,
+      [RefreshTokenCreateArgs]
+    >;
+    const createCall = createMock.mock.calls[0]?.[0];
+    expect(createCall.data).toMatchObject({
+      userId: USER_ID,
+      roleId: ROLE_ID,
+      createdBy: USER_ID,
+    });
+  });
+
+  it('selectRole rejects roles that are not assigned to the user', async () => {
+    const tempToken = await jwtService.signAsync(
+      { sub: USER_ID, email: EMAIL },
+      {
+        secret: configValues['TEMP_JWT_SECRET'],
+        issuer: configValues['JWT_ISSUER'],
+        audience: configValues['JWT_AUDIENCE'],
+        expiresIn: '5m',
+      },
+    );
+    prisma.userRole.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.selectRole({ tempToken, roleId: ROLE_ID }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('refresh rotates the refresh token and revokes the previous one', async () => {
+    const refreshToken = await createRefreshToken('old-jti');
+    const tokenHash = await argon2.hash(refreshToken, {
+      type: argon2.argon2id,
+    });
+    prisma.refreshToken.findUnique.mockResolvedValue({
+      id: 'stored-token-id',
+      userId: USER_ID,
+      roleId: ROLE_ID,
+      tokenHash,
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      replacedByJti: null,
+      estado: Estado.ACTIVO,
+      role: {
+        name: 'ADMIN',
+      },
+    });
+
+    const result = await service.refresh(refreshToken);
+
+    expect(result.refreshToken).not.toBe(refreshToken);
+    const updateMock = prisma.refreshToken.update as jest.Mock<
+      unknown,
+      [RefreshTokenUpdateArgs]
+    >;
+    const updateCall = updateMock.mock.calls[0]?.[0];
+    expect(updateCall.where).toEqual({ id: 'stored-token-id' });
+    expect(updateCall.data).toMatchObject({
+      replacedByJti: result.refreshTokenJti,
+      estado: Estado.INACTIVO,
+    });
+  });
+
+  it('refresh detects reuse and revokes the active token family', async () => {
+    const refreshToken = await createRefreshToken('reused-jti');
+    prisma.refreshToken.findUnique.mockResolvedValue({
+      userId: USER_ID,
+      roleId: ROLE_ID,
+      estado: Estado.ACTIVO,
+      revokedAt: new Date(),
+      replacedByJti: 'next-jti',
+    });
+
+    await expect(service.refresh(refreshToken)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    const updateManyMock = prisma.refreshToken.updateMany as jest.Mock<
+      unknown,
+      [RefreshTokenUpdateManyArgs]
+    >;
+    const updateManyCall = updateManyMock.mock.calls[0]?.[0];
+    expect(updateManyCall.where).toEqual({
+      userId: USER_ID,
+      roleId: ROLE_ID,
+      estado: Estado.ACTIVO,
+    });
+    expect(updateManyCall.data).toMatchObject({
+      reuseDetected: true,
+      estado: Estado.INACTIVO,
+    });
+  });
+
+  it('validateInternal rejects invalid internal API keys', async () => {
+    await expect(
+      service.validateInternal('bad-key', 'token', 'ventas'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('validateInternal rejects internal services outside the allowlist', async () => {
+    await expect(
+      service.validateInternal('test-internal-key', 'token', 'reportes'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  const createRefreshToken = (jti: string) =>
+    jwtService.signAsync(
+      { sub: USER_ID, roleId: ROLE_ID, roleName: 'ADMIN', jti },
+      {
+        secret: configValues['REFRESH_JWT_SECRET'],
+        issuer: configValues['JWT_ISSUER'],
+        audience: configValues['JWT_AUDIENCE'],
+        expiresIn: '7d',
+      },
+    );
+});
