@@ -34,22 +34,51 @@ import { AuthService } from '../../core/auth.service';
       .role-option {
         width: 100%;
         display: grid;
-        gap: 4px;
+        gap: 6px;
         text-align: left;
-        border: 1px solid #c8d0df;
-        border-radius: 6px;
-        padding: 14px 16px;
-        margin-bottom: 12px;
-        background: #ffffff;
+        border: 2px solid transparent;
+        border-radius: 12px;
+        padding: 18px 20px;
+        margin-bottom: 16px;
+        background: #f8fafc;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        position: relative;
+        overflow: hidden;
       }
 
-      .role-option:hover {
-        border-color: #1662d4;
-        background: #f4f8ff;
+      .role-option::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        border-radius: 10px;
+        border: 2px solid transparent;
+        transition: all 0.3s;
+      }
+
+      .role-option:hover:not(:disabled) {
+        transform: translateY(-4px) scale(1.02);
+        background: #ffffff;
+        box-shadow: 0 12px 24px -4px rgba(59, 130, 246, 0.15);
+        border-color: var(--primary-color);
+      }
+
+      .role-option:active:not(:disabled) {
+        transform: translateY(0) scale(0.98);
+      }
+
+      .role-option strong {
+        font-size: 16px;
+        color: var(--text-main);
       }
 
       .role-option span {
-        color: #5e6a7d;
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+
+      .role-option:disabled {
+        opacity: 0.5;
+        cursor: wait;
       }
     `,
   ],

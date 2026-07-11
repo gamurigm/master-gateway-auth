@@ -1,4 +1,4 @@
-﻿import { CommonModule } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { Route, Router, RouterOutlet } from '@angular/router';
 import { MenuModule, MenuNode } from '../../core/api.models';
@@ -42,42 +42,73 @@ import { MenuItemComponent } from './menu-item.component';
         min-height: 100vh;
         display: grid;
         grid-template-columns: 280px 1fr;
+        background: var(--bg-gradient);
       }
 
       .sidebar {
         display: flex;
         flex-direction: column;
         gap: 24px;
-        background: #ffffff;
-        border-right: 1px solid #d8deea;
-        padding: 20px;
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-right: 1px solid var(--glass-border);
+        padding: 32px 24px;
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02);
+        z-index: 10;
       }
 
       .brand {
         display: grid;
-        gap: 4px;
+        gap: 6px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+      }
+
+      .brand strong {
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        background: linear-gradient(90deg, #0f172a, #3b82f6);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
       }
 
       .brand span {
-        color: #5e6a7d;
-        font-size: 14px;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
       }
 
       nav {
         display: grid;
-        gap: 18px;
+        gap: 24px;
         flex: 1;
+        overflow-y: auto;
+      }
+      
+      nav::-webkit-scrollbar {
+        width: 4px;
+      }
+      nav::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
       }
 
       .menu-module h2 {
-        margin: 0 0 8px;
-        font-size: 13px;
-        color: #667085;
+        margin: 0 0 12px;
+        font-size: 11px;
+        color: #94a3b8;
         text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 700;
       }
 
       .workspace {
-        padding: 28px;
+        padding: 40px;
+        overflow-y: auto;
       }
 
       @media (max-width: 800px) {
@@ -87,7 +118,12 @@ import { MenuItemComponent } from './menu-item.component';
 
         .sidebar {
           border-right: 0;
-          border-bottom: 1px solid #d8deea;
+          border-bottom: 1px solid rgba(0,0,0,0.06);
+          padding: 20px;
+        }
+        
+        .workspace {
+          padding: 20px;
         }
       }
     `,

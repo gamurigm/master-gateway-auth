@@ -18,23 +18,32 @@ import { MenuNode } from '../../core/api.models';
     `
       .menu-link {
         display: block;
-        color: #172033;
+        color: var(--text-main);
         text-decoration: none;
-        border-radius: 6px;
-        padding: 9px 10px;
+        border-radius: 8px;
+        padding: 10px 14px;
+        transition: all 0.2s ease;
+        font-weight: 500;
+        font-size: 14px;
       }
       .menu-link:hover {
-        background: #eef4ff;
+        background: var(--primary-color);
+        color: #ffffff;
+        transform: translateX(4px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
       }
       .group-label {
         display: block;
         font-weight: 700;
-        padding: 9px 10px;
+        padding: 10px 14px;
+        color: var(--text-muted);
+        font-size: 14px;
       }
       .child-menu {
-        margin-left: 12px;
-        border-left: 1px solid #d8deea;
-        padding-left: 8px;
+        margin-left: 14px;
+        border-left: 2px solid rgba(0,0,0,0.06);
+        padding-left: 10px;
+        margin-top: 4px;
       }
     `,
   ],
