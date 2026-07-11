@@ -39,3 +39,109 @@ export interface MenuModule {
   menus: MenuNode[];
 }
 
+export interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName?: string | null;
+  estado: string;
+  createdAt: string;
+  updatedAt: string;
+  roles?: { id: string; role: RoleSummary }[];
+}
+
+export interface CreateUserDto {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName?: string;
+}
+
+export interface UpdateUserDto {
+  email?: string;
+  password?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string | null;
+  estado: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateRoleDto {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateRoleDto {
+  name?: string;
+  description?: string;
+}
+
+export interface SystemModule {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  estado: string;
+  createdAt: string;
+  updatedAt: string;
+  menus?: Menu[];
+}
+
+export interface CreateModuleDto {
+  code: string;
+  name: string;
+  description?: string;
+}
+
+export interface UpdateModuleDto {
+  code?: string;
+  name?: string;
+  description?: string;
+}
+
+export interface Menu {
+  id: string;
+  name: string;
+  url?: string | null;
+  icon?: string | null;
+  order: number;
+  moduleId: string;
+  parentId?: string | null;
+  estado: string;
+  createdAt: string;
+  updatedAt: string;
+  module?: SystemModule;
+  parent?: Menu | null;
+}
+
+export interface CreateMenuDto {
+  name: string;
+  url?: string;
+  icon?: string;
+  order?: number;
+  moduleId: string;
+  parentId?: string;
+}
+
+export interface UpdateMenuDto {
+  name?: string;
+  url?: string | null;
+  icon?: string | null;
+  order?: number;
+  moduleId?: string;
+  parentId?: string | null;
+}

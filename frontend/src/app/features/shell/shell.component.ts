@@ -7,6 +7,10 @@ import { MenuService } from '../../core/menu.service';
 import { baseAppChildren } from '../../app-route-children';
 import { DashboardComponent } from '../dashboard/dashboard.component';
 import { DynamicPageComponent } from '../dynamic-page/dynamic-page.component';
+import { UserListComponent } from '../user-list/user-list.component';
+import { RoleListComponent } from '../role-list/role-list.component';
+import { ModuleListComponent } from '../module-list/module-list.component';
+import { MenuListComponent } from '../menu-list/menu-list.component';
 import { MenuItemComponent } from './menu-item.component';
 
 @Component({
@@ -174,18 +178,22 @@ export class ShellComponent implements OnInit {
     this.router.resetConfig(nextConfig);
   }
 
+  private readonly routeMap: Record<string, any> = {
+    'users': UserListComponent,
+    'roles': RoleListComponent,
+    'modules': ModuleListComponent,
+    'menus': MenuListComponent,
+  };
+
   private flattenMenuRoutes(modules: MenuModule[]): Route[] {
     const routes: Route[] = [];
 
     const visit = (node: MenuNode) => {
       if (node.url?.startsWith('/app/')) {
-        routes.push({
-          path: node.url.replace('/app/', ''),
-          component: DynamicPageComponent,
-          data: { title: node.name },
-        });
+        const path = node.url.replace('/app/', '');
+        const component = this.routeMap[path] ?? DynamicPageComponent;
+        routes.push({ path, component, data: { title: node.name } });
       }
-
       node.children.forEach(visit);
     };
 
