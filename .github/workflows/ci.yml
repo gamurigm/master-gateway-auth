@@ -345,17 +345,29 @@ jobs:
       - name: Install Render CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/render-oss/cli/main/bin/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Deploy to Render via CLI
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: |
-          render deploys create ${{ secrets.RENDER_SERVICE_ID }} --confirm --wait --commit "${{ github.sha }}"
+          render services update "$RENDER_SERVICE_ID" \
+            --root-directory "." \
+            --build-command "npm ci --include=dev && npm run build:backend" \
+            --start-command "npm run start:backend:prod" \
+            --health-check-path "/api/health" \
+            --auto-deploy=false \
+            --confirm \
+            --output json
+          render deploys create "$RENDER_SERVICE_ID" \
+            --confirm \
+            --wait \
+            --commit "$GITHUB_SHA"
 
       - name: Notify deploy result
         if: always()
-        uses: appleboy/telegram-action@master
+        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}

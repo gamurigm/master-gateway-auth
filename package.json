@@ -19,6 +19,7 @@
         "build:backend": "npm run build -w backend",
         "build:frontend": "npm run build -w frontend",
         "build:ventas": "npm run build -w ventas",
+        "start:backend:prod": "npm run prisma:deploy -w backend && node backend/dist/prisma/seed.js && npm run start:prod -w backend",
         "deploy": "node scripts/deploy.js",
         "lint": "npm run lint -w backend && npm run lint -w frontend && npm run lint -w ventas",
         "test": "npm run test -w backend && npm run test -w ventas",
