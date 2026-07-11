@@ -351,7 +351,7 @@ jobs:
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          render deploys create ${{ secrets.RENDER_SERVICE_ID }} --confirm --wait
+          render deploys create ${{ secrets.RENDER_SERVICE_ID }} --confirm --wait --commit "${{ github.sha }}"
 
       - name: Notify deploy result
         if: always()
