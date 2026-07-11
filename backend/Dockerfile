@@ -15,8 +15,12 @@ RUN npm ci
 
 COPY backend backend
 
-RUN npm run prisma:generate -w backend \
-    && npm run build -w backend
+RUN npm run prisma:generate -w backend
+
+COPY frontend frontend
+
+RUN npm run build -w backend \
+    && npm run build -w frontend
 
 FROM node:24.15.0-bookworm-slim AS runtime
 
@@ -32,6 +36,7 @@ COPY backend/package.json backend/package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/backend/dist backend/dist
 COPY --from=build /app/backend/prisma backend/prisma
+COPY --from=build /app/frontend/dist frontend/dist
 
 EXPOSE 3000
 
