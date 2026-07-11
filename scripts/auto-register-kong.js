@@ -9,7 +9,7 @@ const http = require('node:http');
 
 // Configuración desde variables de entorno
 const config = {
-  kongAdminUrl: process.env.KONG_ADMIN_URL || 'http://kong:8001',
+  kongAdminUrl: process.env.KONG_ADMIN_URL || 'http://kong:8001', // NOSONAR internal Docker network
   serviceName: process.env.KONG_SERVICE_NAME,
   serviceUrl: process.env.KONG_SERVICE_URL,
   routePaths: (process.env.KONG_ROUTE_PATHS || '').split(',').map(p => p.trim()).filter(Boolean),
@@ -58,12 +58,13 @@ function request(method, path, data = null) {
         body += chunk;
       });
       res.on('end', () => {
+        let parsed;
         try {
-          const jsonBody = body ? JSON.parse(body) : {};
-          resolve({ statusCode: res.statusCode, data: jsonBody });
-        } catch (_e) {
-          resolve({ statusCode: res.statusCode, data: body });
+          parsed = body ? JSON.parse(body) : {};
+        } catch {
+          parsed = body;
         }
+        resolve({ statusCode: res.statusCode, data: parsed });
       });
     });
 
