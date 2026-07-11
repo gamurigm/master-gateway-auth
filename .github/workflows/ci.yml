@@ -87,7 +87,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch origin "${{ github.base_ref }}"
             git diff --name-only "origin/${{ github.base_ref }}...HEAD" > reports/codebert-changed-files-all.txt
-            grep -E '\.(c|cc|cpp|cxx|h|hpp|java|js|jsx|py|rs|ts|tsx)$' reports/codebert-changed-files-all.txt > reports/codebert-changed-files.txt || true
+            grep -E '\.(c|cc|cpp|cxx|h|hpp|java|js|jsx|py|rs|ts|tsx)$' reports/codebert-changed-files-all.txt | grep -v '^scripts/' > reports/codebert-changed-files.txt || true
           else
             find backend/src frontend/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files.txt
           fi

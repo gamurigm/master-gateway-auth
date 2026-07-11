@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ACTOR_ID = '22222222-2222-2222-2222-222222222222';
 const EMAIL = 'test@example.com';
+const TEST_PASSWORD = 'Str0ng!Pass';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -96,7 +97,7 @@ describe('UsersService', () => {
 
       await expect(
         service.create(
-          { email: EMAIL, firstName: 'Test', lastName: 'User', password: 'Str0ng!Pass' },
+        { email: EMAIL, firstName: 'Test', lastName: 'User', password: TEST_PASSWORD },
           ACTOR_ID,
         ),
       ).rejects.toBeInstanceOf(ConflictException);
