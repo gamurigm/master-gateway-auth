@@ -11,11 +11,11 @@ COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
 COPY services/ventas/package.json services/ventas/package.json
 
+COPY backend/prisma backend/prisma
+
 RUN npm ci
 
 COPY backend backend
-
-RUN npm run prisma:generate -w backend
 
 COPY frontend frontend
 
