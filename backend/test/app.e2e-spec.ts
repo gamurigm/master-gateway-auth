@@ -5,10 +5,12 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { generateKeyPairSync } from 'crypto';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { KeysService } from '../src/common/keys/keys.service';
 
 type HealthBody = {
   status: string;
@@ -17,9 +19,25 @@ type HealthBody = {
   timestamp?: string;
 };
 
+const { privateKey: testPrivateKey, publicKey: testPublicKey } =
+  generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+
+const testKeysService = {
+  getPrivateKey: () => testPrivateKey,
+  getPublicKey: () => testPublicKey,
+} as KeysService;
+
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
-  const jwtService = new JwtService();
+  const jwtService = new JwtService({
+    privateKey: testPrivateKey,
+    publicKey: testPublicKey,
+    algorithms: ['RS256'],
+  });
   const prisma = {
     $connect: jest.fn(),
     $disconnect: jest.fn(),
@@ -44,6 +62,8 @@ describe('AppController (e2e)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      .overrideProvider(KeysService)
+      .useValue(testKeysService)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -148,7 +168,7 @@ describe('AppController (e2e)', () => {
         jti: `${roleName.toLowerCase()}-jti`,
       },
       {
-        secret: 'change-me-access-secret',
+        algorithm: 'RS256',
         issuer: 'master-gateway',
         audience: 'master-gateway-clients',
         expiresIn: '15m',
