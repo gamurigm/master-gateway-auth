@@ -169,7 +169,7 @@ jobs:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
   sonarqube:
     name: sonarqube-community
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/agent/sincroniza-dev-test')
     needs:
       - build-test
       - codebert-sast
@@ -291,7 +291,7 @@ jobs:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   telegram-notify-main:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/agent/sincroniza-dev-test')
     needs:
       - build-test
       - codebert-sast
