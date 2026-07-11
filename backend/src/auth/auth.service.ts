@@ -4,9 +4,11 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { EncryptJWT } from 'jose';
 import { createHash, randomUUID } from 'node:crypto';
 import { omitPassword } from '../common/utils/omit-password';
 import { PrismaService } from '../prisma/prisma.service';
@@ -46,6 +48,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -339,15 +342,30 @@ export class AuthService {
     const accessJti = randomUUID();
     const refreshJti = randomUUID();
 
-    const accessToken = await this.jwtService.signAsync(
-      {
-        sub: userId,
-        jti: accessJti,
-        roleId,
-        roleName,
-      } satisfies GatewayTokenPayload,
-      { expiresIn: '15m' },
-    );
+    const jweSecret = this.configService.get<string>('JWE_SECRET');
+    if (!jweSecret) {
+      throw new Error('JWE_SECRET no configurado');
+    }
+
+    const secret = new TextEncoder().encode(jweSecret);
+
+    const accessToken = await new EncryptJWT({
+      sub: userId,
+      jti: accessJti,
+      roleId,
+      roleName,
+    })
+      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+      .setIssuedAt()
+      .setExpirationTime('15m')
+      .setIssuer(
+        this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
+      )
+      .setAudience(
+        this.configService.get<string>('JWT_AUDIENCE') ??
+          'master-gateway-clients',
+      )
+      .encrypt(secret);
 
     const refreshToken = await this.jwtService.signAsync(
       {

@@ -15,7 +15,9 @@ services:
         sync: false
       - key: INTERNAL_API_KEY
         sync: false
+      - key: JWE_SECRET
+        generateValue: true
       - key: SEED_ADMIN_EMAIL
-        value: admin@example.com
+        sync: false
       - key: SEED_ADMIN_PASSWORD
         sync: false
