@@ -1,3 +1,3 @@
 export const environment = {
-  apiUrl: "/api",
+  apiUrl: "https://master-gateway-auth.onrender.com/api",
 };
