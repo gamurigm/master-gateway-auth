@@ -1,8 +1,9 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { generateKeyPairSync } from 'crypto';
+import type { Algorithm } from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 
@@ -11,9 +12,17 @@ const ROLE_ID = '22222222-2222-2222-2222-222222222222';
 const EMAIL = 'admin@example.com';
 const PASSWORD = 'Admin12345!';
 
-type TempTokenPayload = {
-  sub: string;
-  email: string;
+const { privateKey, publicKey } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+});
+
+const jwtOptions = {
+  privateKey,
+  publicKey,
+  signOptions: { algorithm: 'RS256' as const, issuer: 'master-gateway', audience: 'master-gateway-clients' },
+  verifyOptions: { algorithms: ['RS256'] as Algorithm[], issuer: 'master-gateway', audience: 'master-gateway-clients' },
 };
 
 type AccessTokenPayload = {
@@ -36,19 +45,6 @@ type RefreshTokenUpdateManyArgs = {
   data: { reuseDetected: boolean; estado: Estado };
 };
 
-const configValues: Record<string, string> = {
-  JWT_SECRET: 'test-access-secret',
-  JWT_EXPIRES_IN: '15m',
-  JWT_ISSUER: 'master-gateway',
-  JWT_AUDIENCE: 'master-gateway-clients',
-  TEMP_JWT_SECRET: 'test-temp-secret',
-  TEMP_JWT_EXPIRES_IN: '5m',
-  REFRESH_JWT_SECRET: 'test-refresh-secret',
-  REFRESH_JWT_EXPIRES_IN: '7d',
-  INTERNAL_API_KEY: 'test-internal-key',
-  INTERNAL_ALLOWED_SERVICES: 'ventas',
-};
-
 describe('AuthService', () => {
   let service: AuthService;
   let jwtService: JwtService;
@@ -69,21 +65,18 @@ describe('AuthService', () => {
     },
   };
 
-  const configService = {
-    get: jest.fn((key: string) => configValues[key]),
-  } as unknown as ConfigService;
-
   beforeAll(async () => {
     passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
   });
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jwtService = new JwtService();
+    process.env['INTERNAL_API_KEY'] = 'test-internal-key';
+    process.env['INTERNAL_ALLOWED_SERVICES'] = 'ventas';
+    jwtService = new JwtService(jwtOptions);
     service = new AuthService(
       prisma as unknown as PrismaService,
       jwtService,
-      configService,
     );
     prisma.refreshToken.create.mockResolvedValue({});
     prisma.refreshToken.update.mockResolvedValue({});
@@ -109,14 +102,7 @@ describe('AuthService', () => {
     });
 
     const result = await service.login({ email: EMAIL, password: PASSWORD });
-    const tempPayload = await jwtService.verifyAsync<TempTokenPayload>(
-      result.tempToken,
-      {
-        secret: configValues['TEMP_JWT_SECRET'],
-        issuer: configValues['JWT_ISSUER'],
-        audience: configValues['JWT_AUDIENCE'],
-      },
-    );
+    const tempPayload = jwtService.decode(result.tempToken) as Record<string, unknown>;
 
     expect(tempPayload).toMatchObject({ sub: USER_ID, email: EMAIL });
     expect(result.roles).toEqual([
@@ -141,12 +127,7 @@ describe('AuthService', () => {
   it('selectRole issues access and refresh tokens for an assigned role', async () => {
     const tempToken = await jwtService.signAsync(
       { sub: USER_ID, email: EMAIL },
-      {
-        secret: configValues['TEMP_JWT_SECRET'],
-        issuer: configValues['JWT_ISSUER'],
-        audience: configValues['JWT_AUDIENCE'],
-        expiresIn: '5m',
-      },
+      { expiresIn: '5m' },
     );
     prisma.userRole.findFirst.mockResolvedValue({
       role: {
@@ -156,14 +137,7 @@ describe('AuthService', () => {
     });
 
     const result = await service.selectRole({ tempToken, roleId: ROLE_ID });
-    const accessPayload = await jwtService.verifyAsync<AccessTokenPayload>(
-      result.accessToken,
-      {
-        secret: configValues['JWT_SECRET'],
-        issuer: configValues['JWT_ISSUER'],
-        audience: configValues['JWT_AUDIENCE'],
-      },
-    );
+    const accessPayload = jwtService.decode(result.accessToken) as AccessTokenPayload;
 
     expect(accessPayload).toMatchObject({
       sub: USER_ID,
@@ -186,12 +160,7 @@ describe('AuthService', () => {
   it('selectRole rejects roles that are not assigned to the user', async () => {
     const tempToken = await jwtService.signAsync(
       { sub: USER_ID, email: EMAIL },
-      {
-        secret: configValues['TEMP_JWT_SECRET'],
-        issuer: configValues['JWT_ISSUER'],
-        audience: configValues['JWT_AUDIENCE'],
-        expiresIn: '5m',
-      },
+      { expiresIn: '5m' },
     );
     prisma.userRole.findFirst.mockResolvedValue(null);
 
@@ -270,6 +239,7 @@ describe('AuthService', () => {
   });
 
   it('validateInternal rejects internal services outside the allowlist', async () => {
+    process.env['INTERNAL_ALLOWED_SERVICES'] = 'ventas';
     await expect(
       service.validateInternal('test-internal-key', 'token', 'reportes'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
@@ -278,11 +248,6 @@ describe('AuthService', () => {
   const createRefreshToken = (jti: string) =>
     jwtService.signAsync(
       { sub: USER_ID, roleId: ROLE_ID, roleName: 'ADMIN', jti },
-      {
-        secret: configValues['REFRESH_JWT_SECRET'],
-        issuer: configValues['JWT_ISSUER'],
-        audience: configValues['JWT_AUDIENCE'],
-        expiresIn: '7d',
-      },
+      { expiresIn: '7d' },
     );
 });

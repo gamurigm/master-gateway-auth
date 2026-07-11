@@ -38,6 +38,10 @@ COPY --from=build /app/backend/dist backend/dist
 COPY --from=build /app/backend/prisma backend/prisma
 COPY --from=build /app/frontend/dist frontend/dist
 
+RUN mkdir -p /app/keys
+
+VOLUME /app/keys
+
 EXPOSE 3000
 
 CMD ["sh", "-c", "npx prisma migrate deploy --schema backend/prisma/schema.prisma && node backend/dist/prisma/seed.js && node backend/dist/src/main.js"]

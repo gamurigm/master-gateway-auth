@@ -4,9 +4,7 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import type { JwtSignOptions, JwtVerifyOptions } from '@nestjs/jwt';
 import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { createHash, randomUUID } from 'crypto';
@@ -17,24 +15,28 @@ import { SelectRoleDto } from './dto/select-role.dto';
 
 type TempTokenPayload = {
   sub: string;
+  jti: string;
   email: string;
 };
 
 type GatewayTokenPayload = {
   sub: string;
+  jti: string;
   roleId: string;
   roleName?: string;
-  jti: string;
+};
+
+type SessionTokens = {
+  accessToken: string;
+  refreshToken: string;
+  refreshTokenJti: string;
+  tokenType: string;
+  expiresIn: string;
+  role: { id: string; name: string };
 };
 
 type DecodedJwt = {
   exp?: number;
-};
-
-type JwtExpiresIn = NonNullable<JwtSignOptions['expiresIn']>;
-type JwtClaims = {
-  audience: string;
-  issuer: string;
 };
 
 @Injectable()
@@ -44,7 +46,6 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -75,14 +76,12 @@ export class AuthService {
     }));
 
     const tempToken = await this.jwtService.signAsync(
-      { sub: user.id, email: user.email } satisfies TempTokenPayload,
       {
-        secret:
-          this.configService.get<string>('TEMP_JWT_SECRET') ??
-          'change-me-temp-secret',
-        expiresIn: this.jwtExpiresIn('TEMP_JWT_EXPIRES_IN', '5m'),
-        ...this.jwtSignClaims(),
-      },
+        sub: user.id,
+        jti: randomUUID(),
+        email: user.email,
+      } satisfies TempTokenPayload,
+      { expiresIn: '5m' },
     );
 
     this.logger.log(
@@ -100,7 +99,7 @@ export class AuthService {
     };
   }
 
-  async selectRole(dto: SelectRoleDto) {
+  async selectRole(dto: SelectRoleDto): Promise<SessionTokens> {
     const payload = await this.verifyTempToken(dto.tempToken);
     const assignment = await this.prisma.userRole.findFirst({
       where: {
@@ -269,7 +268,7 @@ export class AuthService {
     token: string,
     serviceName: string | undefined,
   ) {
-    const expectedKey = this.configService.get<string>('INTERNAL_API_KEY');
+    const expectedKey = process.env['INTERNAL_API_KEY'];
     if (expectedKey && apiKey !== expectedKey) {
       this.logger.warn(
         JSON.stringify({
@@ -295,12 +294,6 @@ export class AuthService {
     try {
       const payload = await this.jwtService.verifyAsync<GatewayTokenPayload>(
         token,
-        {
-          secret:
-            this.configService.get<string>('JWT_SECRET') ??
-            'change-me-access-secret',
-          ...this.jwtVerifyClaims(),
-        },
       );
 
       return {
@@ -322,12 +315,7 @@ export class AuthService {
 
   private async verifyTempToken(tempToken: string) {
     try {
-      return await this.jwtService.verifyAsync<TempTokenPayload>(tempToken, {
-        secret:
-          this.configService.get<string>('TEMP_JWT_SECRET') ??
-          'change-me-temp-secret',
-        ...this.jwtVerifyClaims(),
-      });
+      return await this.jwtService.verifyAsync<TempTokenPayload>(tempToken);
     } catch {
       throw new UnauthorizedException('TempToken invalido o expirado');
     }
@@ -337,12 +325,6 @@ export class AuthService {
     try {
       return await this.jwtService.verifyAsync<GatewayTokenPayload>(
         refreshToken,
-        {
-          secret:
-            this.configService.get<string>('REFRESH_JWT_SECRET') ??
-            'change-me-refresh-secret',
-          ...this.jwtVerifyClaims(),
-        },
       );
     } catch {
       throw new UnauthorizedException('Refresh token invalido o expirado');
@@ -353,40 +335,28 @@ export class AuthService {
     userId: string,
     roleId: string,
     roleName: string,
-  ) {
+  ): Promise<SessionTokens> {
     const accessJti = randomUUID();
     const refreshJti = randomUUID();
 
     const accessToken = await this.jwtService.signAsync(
       {
         sub: userId,
+        jti: accessJti,
         roleId,
         roleName,
-        jti: accessJti,
       } satisfies GatewayTokenPayload,
-      {
-        secret:
-          this.configService.get<string>('JWT_SECRET') ??
-          'change-me-access-secret',
-        expiresIn: this.jwtExpiresIn('JWT_EXPIRES_IN', '15m'),
-        ...this.jwtSignClaims(),
-      },
+      { expiresIn: '15m' },
     );
 
     const refreshToken = await this.jwtService.signAsync(
       {
         sub: userId,
+        jti: refreshJti,
         roleId,
         roleName,
-        jti: refreshJti,
       } satisfies GatewayTokenPayload,
-      {
-        secret:
-          this.configService.get<string>('REFRESH_JWT_SECRET') ??
-          'change-me-refresh-secret',
-        expiresIn: this.jwtExpiresIn('REFRESH_JWT_EXPIRES_IN', '7d'),
-        ...this.jwtSignClaims(),
-      },
+      { expiresIn: '7d' },
     );
 
     const decoded: unknown = this.jwtService.decode(refreshToken);
@@ -411,26 +381,9 @@ export class AuthService {
       refreshToken,
       refreshTokenJti: refreshJti,
       tokenType: 'Bearer',
-      expiresIn: this.jwtExpiresIn('JWT_EXPIRES_IN', '15m'),
+      expiresIn: '15m',
       role: { id: roleId, name: roleName },
     };
-  }
-
-  private jwtExpiresIn(key: string, fallback: JwtExpiresIn) {
-    return this.configService.get<JwtExpiresIn>(key) ?? fallback;
-  }
-
-  private jwtSignClaims(): JwtClaims {
-    return {
-      issuer: this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
-      audience:
-        this.configService.get<string>('JWT_AUDIENCE') ??
-        'master-gateway-clients',
-    };
-  }
-
-  private jwtVerifyClaims(): Pick<JwtVerifyOptions, 'audience' | 'issuer'> {
-    return this.jwtSignClaims();
   }
 
   private addDays(date: Date, days: number) {
@@ -441,7 +394,7 @@ export class AuthService {
 
   private isAllowedInternalService(serviceName: string | undefined) {
     const allowedServices = (
-      this.configService.get<string>('INTERNAL_ALLOWED_SERVICES') ?? ''
+      process.env['INTERNAL_ALLOWED_SERVICES'] ?? ''
     )
       .split(',')
       .map((service) => service.trim())

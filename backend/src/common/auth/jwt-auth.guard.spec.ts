@@ -1,12 +1,10 @@
 import { UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
   let jwtService: JwtService;
-  let configService: ConfigService;
 
   const mockContext = (authorization?: string) => {
     const request = { headers: { authorization } };
@@ -19,8 +17,7 @@ describe('JwtAuthGuard', () => {
 
   beforeEach(() => {
     jwtService = { verifyAsync: jest.fn() } as any;
-    configService = { get: jest.fn() } as any;
-    guard = new JwtAuthGuard(jwtService, configService);
+    guard = new JwtAuthGuard(jwtService);
   });
 
   it('allows access with valid Bearer token', async () => {
@@ -52,7 +49,7 @@ describe('JwtAuthGuard', () => {
   });
 
   it('sets user on request when token is valid', async () => {
-    const request = { headers: { authorization: 'Bearer valid-token' } };
+    const request = { headers: { authorization: 'Bearer valid-token' } } as { headers: { authorization: string }; user?: unknown };
     const context = {
       switchToHttp: () => ({
         getRequest: () => request,

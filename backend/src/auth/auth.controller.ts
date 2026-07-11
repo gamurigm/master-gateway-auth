@@ -1,12 +1,14 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
   Post,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { KeysService } from '../common/keys/keys.service';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import type { AuthenticatedUser } from '../common/auth/authenticated-user';
 import { JwtAuthGuard } from '../common/auth/jwt-auth.guard';
@@ -18,7 +20,18 @@ import { ValidateTokenDto } from './dto/validate-token.dto';
 
 @Controller()
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly keysService: KeysService,
+  ) {}
+
+  @Get('auth/public-key')
+  getPublicKey() {
+    return {
+      algorithm: 'RS256',
+      publicKey: this.keysService.getPublicKey(),
+    };
+  }
 
   @Throttle({ default: { limit: 5, ttl: 60_000, blockDuration: 300_000 } })
   @Post('auth/login')
