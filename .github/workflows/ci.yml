@@ -352,6 +352,19 @@ jobs:
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: bash scripts/configure-render-service.sh
 
+      - name: Configure Render database and environment
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_DATABASE_ID: ${{ secrets.RENDER_DATABASE_ID }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          TEMP_JWT_SECRET: ${{ secrets.TEMP_JWT_SECRET }}
+          REFRESH_JWT_SECRET: ${{ secrets.REFRESH_JWT_SECRET }}
+          INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+          SEED_ADMIN_EMAIL: ${{ vars.SEED_ADMIN_EMAIL }}
+          SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
+        run: bash scripts/configure-render-environment.sh
+
       - name: Deploy to Render via CLI
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
