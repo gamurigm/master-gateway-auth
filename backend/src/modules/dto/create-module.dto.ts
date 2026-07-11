@@ -14,4 +14,3 @@ export class CreateModuleDto {
   @MaxLength(255)
   description?: string;
 }
-

@@ -25,14 +25,24 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const token = header.slice('Bearer '.length);
-    const secret = this.configService.get<string>('JWT_SECRET') ?? 'change-me-access-secret';
+    const secret =
+      this.configService.get<string>('JWT_SECRET') ?? 'change-me-access-secret';
 
     try {
-      request.user = await this.jwtService.verifyAsync<AuthenticatedUser>(token, { secret });
+      request.user = await this.jwtService.verifyAsync<AuthenticatedUser>(
+        token,
+        {
+          secret,
+          issuer:
+            this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
+          audience:
+            this.configService.get<string>('JWT_AUDIENCE') ??
+            'master-gateway-clients',
+        },
+      );
       return true;
     } catch {
       throw new UnauthorizedException('Token invalido o expirado');
     }
   }
 }
-

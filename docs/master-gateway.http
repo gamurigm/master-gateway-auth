@@ -1,0 +1,70 @@
+@apiUrl = http://localhost:3000/api
+@internalApiKey = change-me-internal-key
+@internalService = ventas
+@email = admin@example.com
+@password = Admin12345!
+
+### Health
+GET {{apiUrl}}/health
+
+### Database health
+GET {{apiUrl}}/health/db
+
+### Login
+# @name login
+POST {{apiUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Select role
+# Replace roleId with one of the IDs returned by Login.
+# @name selectRole
+POST {{apiUrl}}/auth/select-role
+Content-Type: application/json
+
+{
+  "tempToken": "{{login.response.body.tempToken}}",
+  "roleId": "{{login.response.body.roles[0].id}}"
+}
+
+### Menu tree
+GET {{apiUrl}}/menus/tree
+Authorization: Bearer {{selectRole.response.body.accessToken}}
+
+### Validate token for child services
+POST {{apiUrl}}/internals/validate-token
+Content-Type: application/json
+x-internal-api-key: {{internalApiKey}}
+x-internal-service: {{internalService}}
+
+{
+  "token": "{{selectRole.response.body.accessToken}}"
+}
+
+### Refresh token
+POST {{apiUrl}}/auth/refresh-token
+Content-Type: application/json
+
+{
+  "refreshToken": "{{selectRole.response.body.refreshToken}}"
+}
+
+### Ventas health
+GET http://localhost:3006/health
+
+### Ventas protected orders
+GET http://localhost:3006/ventas/ordenes
+Authorization: Bearer {{selectRole.response.body.accessToken}}
+
+### Logout
+POST {{apiUrl}}/auth/logout
+Content-Type: application/json
+Authorization: Bearer {{selectRole.response.body.accessToken}}
+
+{
+  "refreshToken": "{{selectRole.response.body.refreshToken}}"
+}

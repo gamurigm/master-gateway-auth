@@ -4,4 +4,3 @@ export class AssignMenuDto {
   @IsUUID()
   menuId!: string;
 }
-

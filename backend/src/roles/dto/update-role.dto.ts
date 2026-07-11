@@ -11,4 +11,3 @@ export class UpdateRoleDto {
   @MaxLength(255)
   description?: string;
 }
-

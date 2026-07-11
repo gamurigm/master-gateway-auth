@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
@@ -34,7 +38,9 @@ export class UsersService {
   async findOne(id: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, estado: Estado.ACTIVO },
-      include: { roles: { where: { estado: Estado.ACTIVO }, include: { role: true } } },
+      include: {
+        roles: { where: { estado: Estado.ACTIVO }, include: { role: true } },
+      },
     });
 
     if (!user) {
@@ -45,7 +51,9 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto, actorId: string) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const existing = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (existing) {
       throw new ConflictException('El email ya esta registrado');
     }
@@ -55,7 +63,9 @@ export class UsersService {
         email: dto.email,
         firstName: dto.firstName,
         lastName: dto.lastName,
-        passwordHash: await argon2.hash(dto.password, { type: argon2.argon2id }),
+        passwordHash: await argon2.hash(dto.password, {
+          type: argon2.argon2id,
+        }),
         createdBy: actorId,
       },
     });
@@ -73,7 +83,9 @@ export class UsersService {
     if (dto.firstName !== undefined) data.firstName = dto.firstName;
     if (dto.lastName !== undefined) data.lastName = dto.lastName;
     if (dto.password !== undefined) {
-      data.passwordHash = await argon2.hash(dto.password, { type: argon2.argon2id });
+      data.passwordHash = await argon2.hash(dto.password, {
+        type: argon2.argon2id,
+      });
     }
 
     const user = await this.prisma.user.update({ where: { id }, data });
@@ -91,7 +103,9 @@ export class UsersService {
   }
 
   private async ensureActive(id: string) {
-    const user = await this.prisma.user.findFirst({ where: { id, estado: Estado.ACTIVO } });
+    const user = await this.prisma.user.findFirst({
+      where: { id, estado: Estado.ACTIVO },
+    });
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
     }

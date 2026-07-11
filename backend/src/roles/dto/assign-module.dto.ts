@@ -4,4 +4,3 @@ export class AssignModuleDto {
   @IsUUID()
   moduleId!: string;
 }
-

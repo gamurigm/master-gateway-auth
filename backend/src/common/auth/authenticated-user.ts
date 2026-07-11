@@ -4,4 +4,3 @@ export interface AuthenticatedUser {
   roleName?: string;
   jti?: string;
 }
-

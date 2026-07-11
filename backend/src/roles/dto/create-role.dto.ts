@@ -10,4 +10,3 @@ export class CreateRoleDto {
   @MaxLength(255)
   description?: string;
 }
-

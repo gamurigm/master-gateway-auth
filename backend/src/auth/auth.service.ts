@@ -1,13 +1,15 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import type { JwtSignOptions, JwtVerifyOptions } from '@nestjs/jwt';
 import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { omitPassword } from '../common/utils/omit-password';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
@@ -29,8 +31,16 @@ type DecodedJwt = {
   exp?: number;
 };
 
+type JwtExpiresIn = NonNullable<JwtSignOptions['expiresIn']>;
+type JwtClaims = {
+  audience: string;
+  issuer: string;
+};
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -49,6 +59,12 @@ export class AuthService {
     });
 
     if (!user || !(await argon2.verify(user.passwordHash, dto.password))) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.login.failed',
+          emailHash: this.hashIdentifier(dto.email),
+        }),
+      );
       throw new UnauthorizedException('Credenciales invalidas');
     }
 
@@ -61,9 +77,20 @@ export class AuthService {
     const tempToken = await this.jwtService.signAsync(
       { sub: user.id, email: user.email } satisfies TempTokenPayload,
       {
-        secret: this.configService.get<string>('TEMP_JWT_SECRET') ?? 'change-me-temp-secret',
-        expiresIn: this.configService.get<string>('TEMP_JWT_EXPIRES_IN') ?? '5m',
+        secret:
+          this.configService.get<string>('TEMP_JWT_SECRET') ??
+          'change-me-temp-secret',
+        expiresIn: this.jwtExpiresIn('TEMP_JWT_EXPIRES_IN', '5m'),
+        ...this.jwtSignClaims(),
       },
+    );
+
+    this.logger.log(
+      JSON.stringify({
+        event: 'auth.login.success',
+        userId: user.id,
+        roles: roles.length,
+      }),
     );
 
     return {
@@ -87,10 +114,31 @@ export class AuthService {
     });
 
     if (!assignment) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.role_select.denied',
+          userId: payload.sub,
+          roleId: dto.roleId,
+        }),
+      );
       throw new ForbiddenException('El rol no pertenece al usuario');
     }
 
-    return this.issueSessionTokens(payload.sub, assignment.role.id, assignment.role.name);
+    const session = await this.issueSessionTokens(
+      payload.sub,
+      assignment.role.id,
+      assignment.role.name,
+    );
+    this.logger.log(
+      JSON.stringify({
+        event: 'auth.role_select.success',
+        userId: payload.sub,
+        roleId: assignment.role.id,
+        roleName: assignment.role.name,
+      }),
+    );
+
+    return session;
   }
 
   async refresh(refreshToken: string) {
@@ -101,14 +149,37 @@ export class AuthService {
     });
 
     if (!storedToken || storedToken.estado !== Estado.ACTIVO) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.refresh.denied',
+          reason: 'not_found_or_inactive',
+          userId: payload.sub,
+          roleId: payload.roleId,
+        }),
+      );
       throw new UnauthorizedException('Refresh token invalido');
     }
 
     if (storedToken.revokedAt || storedToken.replacedByJti) {
       await this.prisma.refreshToken.updateMany({
-        where: { userId: storedToken.userId, roleId: storedToken.roleId, estado: Estado.ACTIVO },
-        data: { revokedAt: new Date(), reuseDetected: true, estado: Estado.INACTIVO },
+        where: {
+          userId: storedToken.userId,
+          roleId: storedToken.roleId,
+          estado: Estado.ACTIVO,
+        },
+        data: {
+          revokedAt: new Date(),
+          reuseDetected: true,
+          estado: Estado.INACTIVO,
+        },
       });
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.refresh.reuse_detected',
+          userId: storedToken.userId,
+          roleId: storedToken.roleId,
+        }),
+      );
       throw new UnauthorizedException('Refresh token reutilizado');
     }
 
@@ -117,14 +188,34 @@ export class AuthService {
         where: { id: storedToken.id },
         data: { revokedAt: new Date(), estado: Estado.INACTIVO },
       });
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.refresh.denied',
+          reason: 'expired',
+          userId: storedToken.userId,
+          roleId: storedToken.roleId,
+        }),
+      );
       throw new UnauthorizedException('Refresh token expirado');
     }
 
     if (!(await argon2.verify(storedToken.tokenHash, refreshToken))) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.refresh.denied',
+          reason: 'hash_mismatch',
+          userId: storedToken.userId,
+          roleId: storedToken.roleId,
+        }),
+      );
       throw new UnauthorizedException('Refresh token invalido');
     }
 
-    const next = await this.issueSessionTokens(storedToken.userId, storedToken.roleId, storedToken.role.name);
+    const next = await this.issueSessionTokens(
+      storedToken.userId,
+      storedToken.roleId,
+      storedToken.role.name,
+    );
 
     await this.prisma.refreshToken.update({
       where: { id: storedToken.id },
@@ -134,6 +225,14 @@ export class AuthService {
         estado: Estado.INACTIVO,
       },
     });
+
+    this.logger.log(
+      JSON.stringify({
+        event: 'auth.refresh.success',
+        userId: storedToken.userId,
+        roleId: storedToken.roleId,
+      }),
+    );
 
     return next;
   }
@@ -146,22 +245,63 @@ export class AuthService {
         data: { revokedAt: new Date(), estado: Estado.INACTIVO },
       });
     } catch {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.logout.token_invalid',
+          userId,
+        }),
+      );
       return { success: true };
     }
+
+    this.logger.log(
+      JSON.stringify({
+        event: 'auth.logout.success',
+        userId,
+      }),
+    );
 
     return { success: true };
   }
 
-  async validateInternal(apiKey: string | undefined, token: string) {
+  async validateInternal(
+    apiKey: string | undefined,
+    token: string,
+    serviceName: string | undefined,
+  ) {
     const expectedKey = this.configService.get<string>('INTERNAL_API_KEY');
     if (expectedKey && apiKey !== expectedKey) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.internal_validate.denied',
+          reason: 'bad_api_key',
+          serviceName,
+        }),
+      );
       throw new UnauthorizedException('API key interna invalida');
     }
 
+    if (!this.isAllowedInternalService(serviceName)) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.internal_validate.denied',
+          reason: 'service_not_allowed',
+          serviceName,
+        }),
+      );
+      throw new UnauthorizedException('Servicio interno no autorizado');
+    }
+
     try {
-      const payload = await this.jwtService.verifyAsync<GatewayTokenPayload>(token, {
-        secret: this.configService.get<string>('JWT_SECRET') ?? 'change-me-access-secret',
-      });
+      const payload = await this.jwtService.verifyAsync<GatewayTokenPayload>(
+        token,
+        {
+          secret:
+            this.configService.get<string>('JWT_SECRET') ??
+            'change-me-access-secret',
+          ...this.jwtVerifyClaims(),
+        },
+      );
 
       return {
         valid: true,
@@ -170,6 +310,12 @@ export class AuthService {
         roleName: payload.roleName,
       };
     } catch {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.internal_validate.invalid_token',
+          serviceName,
+        }),
+      );
       return { valid: false };
     }
   }
@@ -177,7 +323,10 @@ export class AuthService {
   private async verifyTempToken(tempToken: string) {
     try {
       return await this.jwtService.verifyAsync<TempTokenPayload>(tempToken, {
-        secret: this.configService.get<string>('TEMP_JWT_SECRET') ?? 'change-me-temp-secret',
+        secret:
+          this.configService.get<string>('TEMP_JWT_SECRET') ??
+          'change-me-temp-secret',
+        ...this.jwtVerifyClaims(),
       });
     } catch {
       throw new UnauthorizedException('TempToken invalido o expirado');
@@ -186,36 +335,65 @@ export class AuthService {
 
   private async verifyRefreshToken(refreshToken: string) {
     try {
-      return await this.jwtService.verifyAsync<GatewayTokenPayload>(refreshToken, {
-        secret: this.configService.get<string>('REFRESH_JWT_SECRET') ?? 'change-me-refresh-secret',
-      });
+      return await this.jwtService.verifyAsync<GatewayTokenPayload>(
+        refreshToken,
+        {
+          secret:
+            this.configService.get<string>('REFRESH_JWT_SECRET') ??
+            'change-me-refresh-secret',
+          ...this.jwtVerifyClaims(),
+        },
+      );
     } catch {
       throw new UnauthorizedException('Refresh token invalido o expirado');
     }
   }
 
-  private async issueSessionTokens(userId: string, roleId: string, roleName: string) {
+  private async issueSessionTokens(
+    userId: string,
+    roleId: string,
+    roleName: string,
+  ) {
     const accessJti = randomUUID();
     const refreshJti = randomUUID();
 
     const accessToken = await this.jwtService.signAsync(
-      { sub: userId, roleId, roleName, jti: accessJti } satisfies GatewayTokenPayload,
       {
-        secret: this.configService.get<string>('JWT_SECRET') ?? 'change-me-access-secret',
-        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m',
+        sub: userId,
+        roleId,
+        roleName,
+        jti: accessJti,
+      } satisfies GatewayTokenPayload,
+      {
+        secret:
+          this.configService.get<string>('JWT_SECRET') ??
+          'change-me-access-secret',
+        expiresIn: this.jwtExpiresIn('JWT_EXPIRES_IN', '15m'),
+        ...this.jwtSignClaims(),
       },
     );
 
     const refreshToken = await this.jwtService.signAsync(
-      { sub: userId, roleId, roleName, jti: refreshJti } satisfies GatewayTokenPayload,
       {
-        secret: this.configService.get<string>('REFRESH_JWT_SECRET') ?? 'change-me-refresh-secret',
-        expiresIn: this.configService.get<string>('REFRESH_JWT_EXPIRES_IN') ?? '7d',
+        sub: userId,
+        roleId,
+        roleName,
+        jti: refreshJti,
+      } satisfies GatewayTokenPayload,
+      {
+        secret:
+          this.configService.get<string>('REFRESH_JWT_SECRET') ??
+          'change-me-refresh-secret',
+        expiresIn: this.jwtExpiresIn('REFRESH_JWT_EXPIRES_IN', '7d'),
+        ...this.jwtSignClaims(),
       },
     );
 
-    const decoded = this.jwtService.decode(refreshToken) as DecodedJwt | null;
-    const expiresAt = decoded?.exp ? new Date(decoded.exp * 1000) : this.addDays(new Date(), 7);
+    const decoded: unknown = this.jwtService.decode(refreshToken);
+    const expiresAt =
+      isDecodedJwt(decoded) && decoded.exp
+        ? new Date(decoded.exp * 1000)
+        : this.addDays(new Date(), 7);
 
     await this.prisma.refreshToken.create({
       data: {
@@ -233,9 +411,26 @@ export class AuthService {
       refreshToken,
       refreshTokenJti: refreshJti,
       tokenType: 'Bearer',
-      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m',
+      expiresIn: this.jwtExpiresIn('JWT_EXPIRES_IN', '15m'),
       role: { id: roleId, name: roleName },
     };
+  }
+
+  private jwtExpiresIn(key: string, fallback: JwtExpiresIn) {
+    return this.configService.get<JwtExpiresIn>(key) ?? fallback;
+  }
+
+  private jwtSignClaims(): JwtClaims {
+    return {
+      issuer: this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
+      audience:
+        this.configService.get<string>('JWT_AUDIENCE') ??
+        'master-gateway-clients',
+    };
+  }
+
+  private jwtVerifyClaims(): Pick<JwtVerifyOptions, 'audience' | 'issuer'> {
+    return this.jwtSignClaims();
   }
 
   private addDays(date: Date, days: number) {
@@ -243,4 +438,31 @@ export class AuthService {
     next.setDate(next.getDate() + days);
     return next;
   }
+
+  private isAllowedInternalService(serviceName: string | undefined) {
+    const allowedServices = (
+      this.configService.get<string>('INTERNAL_ALLOWED_SERVICES') ?? ''
+    )
+      .split(',')
+      .map((service) => service.trim())
+      .filter(Boolean);
+
+    return Boolean(serviceName && allowedServices.includes(serviceName));
+  }
+
+  private hashIdentifier(value: string) {
+    return createHash('sha256')
+      .update(value.trim().toLowerCase())
+      .digest('hex')
+      .slice(0, 16);
+  }
+}
+
+function isDecodedJwt(value: unknown): value is DecodedJwt {
+  if (!value || typeof value !== 'object' || !('exp' in value)) {
+    return false;
+  }
+
+  const { exp } = value as { exp?: unknown };
+  return typeof exp === 'number';
 }
