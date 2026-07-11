@@ -9,8 +9,8 @@ import { SystemModule, CreateModuleDto, UpdateModuleDto } from '../../core/api.m
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="modal-overlay" (click)="close()">
-      <div class="modal-panel" (click)="$event.stopPropagation()">
+    <div class="modal-backdrop" (click)="close()">
+      <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
         <h2>{{ isEdit ? 'Editar módulo' : 'Nuevo módulo' }}</h2>
 
         <div *ngIf="error" class="error">{{ error }}</div>
@@ -29,29 +29,15 @@ import { SystemModule, CreateModuleDto, UpdateModuleDto } from '../../core/api.m
         </div>
 
         <div class="modal-actions">
-          <button class="secondary-button" style="width:auto;padding:0 24px;height:40px;min-height:40px" (click)="close()">Cancelar</button>
-          <button class="primary-button" style="width:auto;padding:0 24px;height:40px;min-height:40px" [disabled]="saving" (click)="submit()">
+          <button class="secondary-button" (click)="close()">Cancelar</button>
+          <button class="primary-button" [disabled]="saving" (click)="submit()">
             {{ saving ? 'Guardando...' : 'Guardar' }}
           </button>
         </div>
       </div>
     </div>
   `,
-  styles: [`
-    .modal-overlay {
-      position:fixed;inset:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(4px);
-      display:grid;place-items:center;z-index:1000;animation:slideUpFade 0.2s ease-out;
-      padding:24px
-    }
-    .modal-panel {
-      width:min(100%,500px);
-      background:var(--glass-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-      border:1px solid var(--glass-border);border-radius:16px;box-shadow:var(--glass-shadow);
-      padding:32px;animation:slideUpFade 0.3s ease-out
-    }
-    .modal-panel h2 { margin:0 0 24px;font-size:20px;font-weight:700 }
-    .modal-actions { display:flex;justify-content:flex-end;gap:12px;margin-top:24px }
-  `]
+  styles: [],
 })
 export class ModuleFormComponent implements OnInit {
   private readonly modulesService = inject(ModulesService);

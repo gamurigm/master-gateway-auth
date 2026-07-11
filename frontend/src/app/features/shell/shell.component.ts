@@ -12,17 +12,36 @@ import { RoleListComponent } from '../role-list/role-list.component';
 import { ModuleListComponent } from '../module-list/module-list.component';
 import { MenuListComponent } from '../menu-list/menu-list.component';
 import { MenuItemComponent } from './menu-item.component';
+import { AppIconComponent } from '../../shared/app-icon.component';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, MenuItemComponent],
+  imports: [CommonModule, RouterOutlet, MenuItemComponent, AppIconComponent],
   template: `
-    <div class="shell">
-      <aside class="sidebar">
+    <div class="shell" [class.menu-open]="menuOpen">
+      <header class="mobile-bar">
+        <button class="icon-btn" type="button" (click)="toggleMenu()" [title]="menuOpen ? 'Cerrar menu' : 'Abrir menu'">
+          <app-icon [name]="menuOpen ? 'lucidePanelLeftClose' : 'lucidePanelLeftOpen'" />
+        </button>
+        <strong>Master Gateway</strong>
+        <span>{{ roleName }}</span>
+      </header>
+
+      <button *ngIf="menuOpen" class="menu-scrim" type="button" aria-label="Cerrar menu" (click)="toggleMenu()"></button>
+
+      <aside class="sidebar" [attr.aria-hidden]="!menuOpen && isCompactViewport ? 'true' : null">
         <div class="brand">
-          <strong>Master Gateway</strong>
-          <span>{{ roleName }}</span>
+          <span class="brand-mark"><app-icon name="lucideShieldCheck" [size]="21" /></span>
+          <div>
+            <strong>Master Gateway</strong>
+            <span>Control de acceso</span>
+          </div>
+        </div>
+
+        <div class="active-role">
+          <span>Rol activo</span>
+          <strong>{{ roleName }}</strong>
         </div>
 
         <nav>
@@ -32,7 +51,10 @@ import { MenuItemComponent } from './menu-item.component';
           </section>
         </nav>
 
-        <button type="button" class="secondary-button" (click)="logout()">Cerrar sesion</button>
+        <button type="button" class="logout-button" (click)="logout()">
+          <app-icon name="lucideLogOut" />
+          Cerrar sesion
+        </button>
       </aside>
 
       <main class="workspace">
@@ -46,45 +68,50 @@ import { MenuItemComponent } from './menu-item.component';
         min-height: 100vh;
         display: grid;
         grid-template-columns: 280px 1fr;
-        background: var(--bg-gradient);
+        background: var(--canvas);
       }
+
+      .mobile-bar { display: none; }
+      .menu-scrim { display: none; }
 
       .sidebar {
         display: flex;
         flex-direction: column;
-        gap: 24px;
-        background: var(--glass-bg);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-right: 1px solid var(--glass-border);
-        padding: 32px 24px;
-        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02);
+        gap: 20px;
+        background: #17211c;
+        border-right: 1px solid #2e3b34;
+        padding: 24px 18px;
         z-index: 10;
       }
 
       .brand {
         display: grid;
-        gap: 6px;
-        padding-bottom: 24px;
-        border-bottom: 1px solid rgba(0,0,0,0.06);
+        grid-template-columns: 38px 1fr;
+        align-items: center;
+        gap: 11px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid #344139;
       }
 
+      .brand-mark { width: 38px; height: 38px; display: grid; place-items: center; color: #fff; background: #08775b; border-radius: 6px; }
+      .brand div { display: grid; gap: 3px; min-width: 0; }
+
       .brand strong {
-        font-size: 22px;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        background: linear-gradient(90deg, #0f172a, #3b82f6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 750;
+        letter-spacing: 0;
       }
 
       .brand span {
-        color: var(--text-muted);
-        font-size: 13px;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        color: #a9b8b0;
+        font-size: 12px;
+        letter-spacing: 0;
       }
+
+      .active-role { display: grid; gap: 4px; padding: 11px 12px; color: #dfe8e3; background: #202d26; border: 1px solid #344139; border-radius: 6px; }
+      .active-role span { color: #9eaea5; font-size: 11px; text-transform: uppercase; }
+      .active-role strong { font-size: 14px; }
 
       nav {
         display: grid;
@@ -104,31 +131,36 @@ import { MenuItemComponent } from './menu-item.component';
       .menu-module h2 {
         margin: 0 0 12px;
         font-size: 11px;
-        color: #94a3b8;
+        color: #91a299;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0;
         font-weight: 700;
       }
 
       .workspace {
-        padding: 40px;
+        padding: 32px;
         overflow-y: auto;
       }
 
-      @media (max-width: 800px) {
-        .shell {
-          grid-template-columns: 1fr;
-        }
+      .logout-button { min-height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 12px; color: #dfe8e3; background: transparent; border: 1px solid #3a4941; border-radius: 6px; font-weight: 650; }
+      .logout-button:hover { color: #fff; background: #26342c; }
 
+      @media (max-width: 800px) {
+        .shell { display: block; padding-top: 58px; }
+        .mobile-bar { position: fixed; inset: 0 0 auto; z-index: 30; height: 58px; display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 10px; padding: 0 14px; color: #fff; background: #17211c; border-bottom: 1px solid #344139; }
+        .mobile-bar .icon-btn { color: #fff; }
+        .mobile-bar span { max-width: 105px; overflow: hidden; color: #afbeb6; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+        .menu-scrim { position: fixed; inset: 58px 0 0; z-index: 19; display: block; width: 100%; border: 0; background: rgba(12, 18, 15, 0.55); }
         .sidebar {
-          border-right: 0;
-          border-bottom: 1px solid rgba(0,0,0,0.06);
-          padding: 20px;
+          position: fixed;
+          inset: 58px auto 0 0;
+          z-index: 20;
+          width: min(84vw, 300px);
+          transform: translateX(-101%);
+          transition: transform 180ms ease;
         }
-        
-        .workspace {
-          padding: 20px;
-        }
+        .menu-open .sidebar { transform: translateX(0); }
+        .workspace { padding: 20px 14px; }
       }
     `,
   ],
@@ -140,6 +172,12 @@ export class ShellComponent implements OnInit {
 
   modules: MenuModule[] = [];
   roleName = this.authService.getCurrentRole()?.name ?? 'Sin rol';
+  menuOpen = false;
+  isCompactViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 800px)').matches;
+
+  toggleMenu() {
+    this.menuOpen = !this.menuOpen;
+  }
 
   ngOnInit() {
     this.menuService.tree().subscribe({
@@ -217,4 +255,3 @@ export class ShellComponent implements OnInit {
     return [...merged.values()];
   }
 }
-

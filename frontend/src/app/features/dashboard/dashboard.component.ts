@@ -5,42 +5,46 @@ import { UsersService } from '../../core/users.service';
 import { RolesService } from '../../core/roles.service';
 import { ModulesService } from '../../core/modules.service';
 import { MenuService } from '../../core/menu.service';
+import { AppIconComponent } from '../../shared/app-icon.component';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, AppIconComponent],
   template: `
     <section class="dashboard">
-      <header class="dash-header">
-        <h1>Dashboard</h1>
-        <p>Rol activo: <strong>{{ roleName }}</strong></p>
+      <header class="page-header">
+        <div>
+          <p class="page-kicker">Resumen operativo</p>
+          <h1>Dashboard</h1>
+          <p class="page-description">Administracion de identidades y autorizaciones para el rol {{ roleName }}.</p>
+        </div>
       </header>
 
-      <div class="cards">
-        <div class="stat-card">
-          <div class="stat-icon users-icon">&#128100;</div>
+      <div class="metrics panel">
+        <div class="stat-item">
+          <div class="stat-icon users-icon"><app-icon name="lucideUsers" [size]="21" /></div>
           <div class="stat-info">
             <span class="stat-value">{{ userCount }}</span>
             <span class="stat-label">Usuarios</span>
           </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon roles-icon">&#128274;</div>
+        <div class="stat-item">
+          <div class="stat-icon roles-icon"><app-icon name="lucideShieldCheck" [size]="21" /></div>
           <div class="stat-info">
             <span class="stat-value">{{ roleCount }}</span>
             <span class="stat-label">Roles</span>
           </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon modules-icon">&#128230;</div>
+        <div class="stat-item">
+          <div class="stat-icon modules-icon"><app-icon name="lucideBoxes" [size]="21" /></div>
           <div class="stat-info">
             <span class="stat-value">{{ moduleCount }}</span>
             <span class="stat-label">Modulos</span>
           </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon menus-icon">&#9776;</div>
+        <div class="stat-item">
+          <div class="stat-icon menus-icon"><app-icon name="lucideMenu" [size]="21" /></div>
           <div class="stat-info">
             <span class="stat-value">{{ menuCount }}</span>
             <span class="stat-label">Menus</span>
@@ -50,32 +54,22 @@ import { MenuService } from '../../core/menu.service';
     </section>
   `,
   styles: [`
-    .dashboard { animation: slideUpFade 0.4s ease-out; }
-    .dash-header { margin-bottom: 32px }
-    .dash-header h1 { margin: 0 0 8px; font-size: 24px; font-weight: 800; letter-spacing: -0.3px }
-    .dash-header p { margin: 0; color: var(--text-muted); font-size: 15px }
-    .dash-header strong { color: var(--text-main) }
-    .cards {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px
-    }
-    .stat-card {
-      display: flex; align-items: center; gap: 16px;
-      background: var(--glass-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--glass-border); border-radius: 16px;
-      box-shadow: var(--glass-shadow); padding: 24px; transition: transform 0.2s
-    }
-    .stat-card:hover { transform: translateY(-2px) }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; }
+    .stat-item { min-width: 0; display: flex; align-items: center; gap: 14px; padding: 22px; border-right: 1px solid var(--border); }
+    .stat-item:last-child { border-right: 0; }
     .stat-icon {
-      width: 56px; height: 56px; border-radius: 14px;
-      display: grid; place-items: center; font-size: 24px; flex-shrink: 0
+      width: 42px; height: 42px; border-radius: 6px;
+      display: grid; place-items: center; flex-shrink: 0
     }
-    .users-icon { background: #eff6ff; color: #2563eb }
-    .roles-icon { background: #f0fdf4; color: #16a34a }
-    .modules-icon { background: #fefce8; color: #ca8a04 }
-    .menus-icon { background: #fdf2f8; color: #db2777 }
+    .users-icon { background: #e9f2fb; color: #1769aa }
+    .roles-icon { background: var(--primary-soft); color: var(--primary-color) }
+    .modules-icon { background: var(--warning-soft); color: var(--warning) }
+    .menus-icon { background: #f2eef9; color: #6b4ba1 }
     .stat-info { display: grid; gap: 2px }
-    .stat-value { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; color: var(--text-main) }
+    .stat-value { font-size: 25px; font-weight: 800; letter-spacing: 0; color: var(--text-main) }
     .stat-label { font-size: 13px; color: var(--text-muted); font-weight: 500 }
+    @media (max-width: 980px) { .metrics { grid-template-columns: repeat(2, 1fr); } .stat-item:nth-child(2) { border-right: 0; } .stat-item:nth-child(-n+2) { border-bottom: 1px solid var(--border); } }
+    @media (max-width: 520px) { .metrics { grid-template-columns: 1fr; } .stat-item { border-right: 0; border-bottom: 1px solid var(--border); } .stat-item:nth-child(3) { border-bottom: 1px solid var(--border); } .stat-item:last-child { border-bottom: 0; } }
   `],
 })
 export class DashboardComponent implements OnInit {

@@ -6,6 +6,7 @@ import { RolesService } from '../../core/roles.service';
 import { UsersService } from '../../core/users.service';
 import { ModulesService } from '../../core/modules.service';
 import { MenuService } from '../../core/menu.service';
+import { AppIconComponent } from '../../shared/app-icon.component';
 import {
   RoleDetail,
   User,
@@ -16,12 +17,12 @@ import {
 @Component({
   selector: 'app-role-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AppIconComponent],
   template: `
     <section class="detail-page">
       <header class="detail-header">
         <div>
-          <button class="back-btn" (click)="goBack()">&#8592; Volver</button>
+          <button class="back-btn" (click)="goBack()"><app-icon name="lucideArrowLeft" [size]="16" />Volver</button>
           <h1>Asignaciones: {{ role?.name }}</h1>
           <p *ngIf="role?.description">{{ role.description }}</p>
         </div>
@@ -66,11 +67,10 @@ import {
             </select>
             <button
               class="primary-button"
-              style="width:auto;padding:0 20px;height:40px;min-height:40px"
               [disabled]="!selectedUserId || assigning"
               (click)="assignUser()"
             >
-              {{ assigning ? 'Asignando...' : '+ Asignar' }}
+              <app-icon name="lucidePlus" />{{ assigning ? 'Asignando...' : 'Asignar' }}
             </button>
           </div>
           <div class="crud-card">
@@ -93,7 +93,7 @@ import {
                       class="icon-btn delete"
                       title="Desasignar"
                       (click)="unassignUser(ur)"
-                    >&#10005;</button>
+                    ><app-icon name="lucideTrash2" [size]="16" /></button>
                   </td>
                 </tr>
                 <tr *ngIf="role.users.length === 0">
@@ -115,11 +115,10 @@ import {
             </select>
             <button
               class="primary-button"
-              style="width:auto;padding:0 20px;height:40px;min-height:40px"
               [disabled]="!selectedModuleId || assigning"
               (click)="assignModule()"
             >
-              {{ assigning ? 'Asignando...' : '+ Asignar' }}
+              <app-icon name="lucidePlus" />{{ assigning ? 'Asignando...' : 'Asignar' }}
             </button>
           </div>
           <div class="crud-card">
@@ -142,7 +141,7 @@ import {
                       class="icon-btn delete"
                       title="Desasignar"
                       (click)="unassignModule(rm)"
-                    >&#10005;</button>
+                    ><app-icon name="lucideTrash2" [size]="16" /></button>
                   </td>
                 </tr>
                 <tr *ngIf="role.modules.length === 0">
@@ -164,11 +163,10 @@ import {
             </select>
             <button
               class="primary-button"
-              style="width:auto;padding:0 20px;height:40px;min-height:40px"
               [disabled]="!selectedMenuId || assigning"
               (click)="assignMenu()"
             >
-              {{ assigning ? 'Asignando...' : '+ Asignar' }}
+              <app-icon name="lucidePlus" />{{ assigning ? 'Asignando...' : 'Asignar' }}
             </button>
           </div>
           <div class="crud-card">
@@ -193,7 +191,7 @@ import {
                       class="icon-btn delete"
                       title="Desasignar"
                       (click)="unassignMenu(rmenu)"
-                    >&#10005;</button>
+                    ><app-icon name="lucideTrash2" [size]="16" /></button>
                   </td>
                 </tr>
                 <tr *ngIf="role.menus.length === 0">
@@ -207,51 +205,17 @@ import {
     </section>
   `,
   styles: [`
-    .detail-page { animation: slideUpFade 0.4s ease-out; }
-    .detail-header { margin-bottom: 24px }
-    .detail-header h1 { margin: 8px 0 4px; font-size: 22px; font-weight: 800; letter-spacing: -0.3px }
-    .detail-header p { margin: 0; color: var(--text-muted); font-size: 14px }
-    .back-btn {
-      background: none; border: none; color: var(--primary-color); font-weight: 600;
-      font-size: 14px; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 4px
-    }
-    .back-btn:hover { text-decoration: underline }
-    .loading { padding: 48px; text-align: center; color: var(--text-muted); font-weight: 500 }
-    .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 0 }
-    .tab-btn {
-      padding: 10px 20px; font-size: 14px; font-weight: 600; color: var(--text-muted);
-      background: none; border: none; border-bottom: 2px solid transparent;
-      margin-bottom: -2px; cursor: pointer; transition: all 0.2s
-    }
-    .tab-btn:hover { color: var(--text-main) }
-    .tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color) }
-    .assignment-section { display: grid; gap: 16px }
-    .assign-bar { display: flex; gap: 12px; align-items: center }
-    .assign-select {
-      flex: 1; height: 40px; border: 2px solid #e2e8f0; border-radius: 10px;
-      padding: 0 12px; font-size: 14px; background: #f8fafc; color: var(--text-main);
-      cursor: pointer; transition: border-color 0.2s
-    }
-    .assign-select:focus { outline: none; border-color: var(--primary-color) }
-    .crud-card {
-      background: var(--glass-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--glass-border); border-radius: 16px; box-shadow: var(--glass-shadow); overflow: hidden
-    }
-    .crud-table { width: 100%; border-collapse: collapse }
-    .crud-table th {
-      text-align: left; padding: 14px 20px; font-size: 12px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
-      background: #f8fafc; border-bottom: 1px solid #e2e8f0
-    }
-    .crud-table td { padding: 14px 20px; font-size: 14px; border-bottom: 1px solid #f1f5f9; color: var(--text-main) }
-    .crud-table tr:last-child td { border-bottom: 0 }
-    .crud-table tr:hover td { background: #f8fafc }
-    .th-actions, .td-actions { text-align: center; width: 100px }
-    .td-actions { display: flex; gap: 8px; justify-content: center }
-    .icon-btn { width: 32px; height: 32px; border: 0; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; transition: all 0.2s }
-    .icon-btn.delete { background: #fef2f2; color: #dc2626 }
-    .icon-btn.delete:hover { background: #fee2e2 }
-    .empty { text-align: center; color: var(--text-muted); padding: 40px 20px !important; font-weight: 500 }
+    .detail-header { margin-bottom: 20px; }
+    .detail-header h1 { margin: 10px 0 4px; font-size: 24px; letter-spacing: 0; }
+    .detail-header p { margin: 0; color: var(--text-muted); font-size: 14px; }
+    .back-btn { display: inline-flex; align-items: center; gap: 6px; padding: 0; color: var(--primary-color); background: none; border: 0; font-size: 14px; font-weight: 700; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; overflow-x: auto; border-bottom: 1px solid var(--border); }
+    .tab-btn { min-width: max-content; padding: 11px 16px; color: var(--text-muted); background: none; border: 0; border-bottom: 2px solid transparent; font-size: 14px; font-weight: 650; }
+    .tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+    .assignment-section { display: grid; gap: 14px; }
+    .assign-bar { display: flex; align-items: center; gap: 10px; }
+    .assign-select { flex: 1; min-height: 40px; }
+    @media (max-width: 620px) { .assign-bar { align-items: stretch; flex-direction: column; } }
   `],
 })
 export class RoleDetailComponent implements OnInit {

@@ -36,7 +36,11 @@ jobs:
 
       - name: Install Render CLI
         run: |
-          curl -fsSL https://raw.githubusercontent.com/render-oss/cli/main/bin/install.sh | sh
+          archive=cli_2.19.0_linux_amd64.zip
+          curl -fsSLO "https://github.com/render-oss/cli/releases/download/v2.19.0/$archive"
+          unzip -q "$archive"
+          mkdir -p "$HOME/.local/bin"
+          install -m 0755 cli_v2.19.0 "$HOME/.local/bin/render"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Deploy exact commit

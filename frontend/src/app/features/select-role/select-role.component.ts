@@ -3,18 +3,23 @@ import { Component, OnInit, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { RoleSummary } from '../../core/api.models';
 import { AuthService } from '../../core/auth.service';
+import { AppIconComponent } from '../../shared/app-icon.component';
 
 @Component({
   selector: 'app-select-role',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, AppIconComponent],
   template: `
     <main class="auth-page">
       <section class="auth-panel">
+        <div class="auth-brand">
+          <span class="auth-brand-mark"><app-icon name="lucideKeyRound" [size]="21" /></span>
+          <strong>Master Gateway</strong>
+        </div>
         <h1>Espacio de trabajo</h1>
         <p>Selecciona el rol con el que operaras en esta sesion.</p>
 
-        <div class="error" *ngIf="error">{{ error }}</div>
+        <div class="error" *ngIf="error"><app-icon name="lucideCircleAlert" />{{ error }}</div>
 
         <button
           class="role-option"
@@ -23,8 +28,9 @@ import { AuthService } from '../../core/auth.service';
           (click)="select(role.id)"
           [disabled]="loading"
         >
-          <strong>{{ role.name }}</strong>
-          <span>{{ role.description || 'Sin descripcion' }}</span>
+          <span class="role-icon"><app-icon name="lucideShieldCheck" /></span>
+          <span class="role-copy"><strong>{{ role.name }}</strong><small>{{ role.description || 'Sin descripcion' }}</small></span>
+          <app-icon name="lucideChevronRight" />
         </button>
       </section>
     </main>
@@ -34,52 +40,26 @@ import { AuthService } from '../../core/auth.service';
       .role-option {
         width: 100%;
         display: grid;
-        gap: 6px;
+        grid-template-columns: 36px 1fr 20px;
+        align-items: center;
+        gap: 12px;
         text-align: left;
-        border: 2px solid transparent;
-        border-radius: 12px;
-        padding: 18px 20px;
-        margin-bottom: 16px;
-        background: #f8fafc;
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        position: relative;
-        overflow: hidden;
-      }
-
-      .role-option::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        border-radius: 10px;
-        border: 2px solid transparent;
-        transition: all 0.3s;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 13px 14px;
+        margin-bottom: 10px;
+        background: var(--surface);
+        transition: border-color 0.15s ease, background 0.15s ease;
       }
 
       .role-option:hover:not(:disabled) {
-        transform: translateY(-4px) scale(1.02);
-        background: #ffffff;
-        box-shadow: 0 12px 24px -4px rgba(59, 130, 246, 0.15);
+        background: var(--primary-soft);
         border-color: var(--primary-color);
       }
-
-      .role-option:active:not(:disabled) {
-        transform: translateY(0) scale(0.98);
-      }
-
-      .role-option strong {
-        font-size: 16px;  
-        color: var(--text-main);
-      }
-
-      .role-option span {
-        font-size: 14px;
-        color: var(--text-muted);
-      }
-
-      .role-option:disabled {
-        opacity: 0.5;
-        cursor: wait;
-      }
+      .role-icon { width: 36px; height: 36px; display: grid; place-items: center; color: var(--primary-color); background: var(--primary-soft); border-radius: 6px; }
+      .role-copy { min-width: 0; display: grid; gap: 3px; }
+      .role-copy strong { color: var(--text-main); font-size: 14px; }
+      .role-copy small { overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
     `,
   ],
 })
@@ -119,4 +99,3 @@ export class SelectRoleComponent implements OnInit {
     });
   }
 }
-

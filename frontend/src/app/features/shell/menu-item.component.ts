@@ -1,14 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 import { MenuNode } from '../../core/api.models';
 
 @Component({
   selector: 'app-menu-item',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, RouterLinkActive],
   template: `
-    <a *ngIf="node.url" [routerLink]="node.url" class="menu-link">{{ node.name }}</a>
+    <a *ngIf="node.url" [routerLink]="node.url" routerLinkActive="active" class="menu-link">{{ node.name }}</a>
     <span *ngIf="!node.url" class="group-label">{{ node.name }}</span>
     <div class="child-menu" *ngIf="node.children.length">
       <app-menu-item *ngFor="let child of node.children" [node]="child" />
@@ -18,30 +18,28 @@ import { MenuNode } from '../../core/api.models';
     `
       .menu-link {
         display: block;
-        color: var(--text-main);
+        color: #d9e3dd;
         text-decoration: none;
         border-radius: 8px;
         padding: 10px 14px;
-        transition: all 0.2s ease;
+        transition: background 0.15s ease, color 0.15s ease;
         font-weight: 500;
         font-size: 14px;
       }
-      .menu-link:hover {
-        background: var(--primary-color);
+      .menu-link:hover, .menu-link.active {
+        background: #08775b;
         color: #ffffff;
-        transform: translateX(4px);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
       }
       .group-label {
         display: block;
         font-weight: 700;
         padding: 10px 14px;
-        color: var(--text-muted);
+        color: #a9b8b0;
         font-size: 14px;
       }
       .child-menu {
         margin-left: 14px;
-        border-left: 2px solid rgba(0,0,0,0.06);
+        border-left: 1px solid #425048;
         padding-left: 10px;
         margin-top: 4px;
       }
