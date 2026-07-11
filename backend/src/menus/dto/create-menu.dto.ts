@@ -6,17 +6,21 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Sanitize } from '../../common/decorators/sanitize.decorator';
 
 export class CreateMenuDto {
+  @Sanitize()
   @IsString()
   @MaxLength(120)
   name!: string;
 
+  @Sanitize()
   @IsOptional()
   @IsString()
   @MaxLength(255)
   url?: string;
 
+  @Sanitize()
   @IsOptional()
   @IsString()
   @MaxLength(80)
@@ -27,10 +31,10 @@ export class CreateMenuDto {
   @Min(0)
   order = 0;
 
-  @IsUUID()
+  @IsUUID('4')
   moduleId!: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   parentId?: string;
 }

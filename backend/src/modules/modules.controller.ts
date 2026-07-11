@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   UseGuards,
@@ -17,6 +18,8 @@ import { CreateModuleDto } from './dto/create-module.dto';
 import { UpdateModuleDto } from './dto/update-module.dto';
 import { ModulesService } from './modules.service';
 
+const UUIDv4 = new ParseUUIDPipe({ version: '4' });
+
 @RequireRoles('ADMIN')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('modules')
@@ -29,7 +32,7 @@ export class ModulesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', UUIDv4) id: string) {
     return this.modulesService.findOne(id);
   }
 
@@ -40,7 +43,7 @@ export class ModulesController {
 
   @Put(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', UUIDv4) id: string,
     @Body() dto: UpdateModuleDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
@@ -48,7 +51,7 @@ export class ModulesController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+  remove(@Param('id', UUIDv4) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.modulesService.remove(id, user.sub);
   }
 }

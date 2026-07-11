@@ -1,6 +1,6 @@
 import { IsUUID } from 'class-validator';
 
 export class AssignModuleDto {
-  @IsUUID()
+  @IsUUID('4')
   moduleId!: string;
 }

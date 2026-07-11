@@ -4,6 +4,6 @@ export class SelectRoleDto {
   @IsString()
   tempToken!: string;
 
-  @IsUUID()
+  @IsUUID('4')
   roleId!: string;
 }

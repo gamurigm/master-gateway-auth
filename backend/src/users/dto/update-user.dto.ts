@@ -5,8 +5,10 @@ import {
   Matches,
   MaxLength,
 } from 'class-validator';
+import { Sanitize } from '../../common/decorators/sanitize.decorator';
 
 export class UpdateUserDto {
+  @Sanitize()
   @IsOptional()
   @IsEmail()
   email?: string;
@@ -19,11 +21,13 @@ export class UpdateUserDto {
   })
   password?: string;
 
+  @Sanitize()
   @IsOptional()
   @IsString()
   @MaxLength(100)
   firstName?: string;
 
+  @Sanitize()
   @IsOptional()
   @IsString()
   @MaxLength(100)

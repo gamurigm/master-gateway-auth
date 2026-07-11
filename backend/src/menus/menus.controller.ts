@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   UseGuards,
@@ -16,6 +17,8 @@ import { RolesGuard } from '../common/auth/roles.guard';
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { MenusService } from './menus.service';
+
+const UUIDv4 = new ParseUUIDPipe({ version: '4' });
 
 @UseGuards(JwtAuthGuard)
 @Controller('menus')
@@ -45,7 +48,7 @@ export class MenusController {
   @RequireRoles('ADMIN')
   @UseGuards(RolesGuard)
   update(
-    @Param('id') id: string,
+    @Param('id', UUIDv4) id: string,
     @Body() dto: UpdateMenuDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
@@ -55,7 +58,7 @@ export class MenusController {
   @Delete(':id')
   @RequireRoles('ADMIN')
   @UseGuards(RolesGuard)
-  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+  remove(@Param('id', UUIDv4) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.menusService.remove(id, user.sub);
   }
 }

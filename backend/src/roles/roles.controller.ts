@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   UseGuards,
@@ -19,6 +20,8 @@ import { AssignUserDto } from './dto/assign-user.dto';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { RolesService } from './roles.service';
+
+const UUIDv4 = new ParseUUIDPipe({ version: '4' });
 
 @RequireRoles('ADMIN')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -38,7 +41,7 @@ export class RolesController {
 
   @Put(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', UUIDv4) id: string,
     @Body() dto: UpdateRoleDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
@@ -46,13 +49,13 @@ export class RolesController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+  remove(@Param('id', UUIDv4) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.rolesService.remove(id, user.sub);
   }
 
   @Post(':id/users')
   assignUser(
-    @Param('id') id: string,
+    @Param('id', UUIDv4) id: string,
     @Body() dto: AssignUserDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
@@ -61,8 +64,8 @@ export class RolesController {
 
   @Delete(':id/users/:userId')
   unassignUser(
-    @Param('id') id: string,
-    @Param('userId') userId: string,
+    @Param('id', UUIDv4) id: string,
+    @Param('userId', UUIDv4) userId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.rolesService.unassignUser(id, userId, user.sub);
@@ -70,7 +73,7 @@ export class RolesController {
 
   @Post(':id/modules')
   assignModule(
-    @Param('id') id: string,
+    @Param('id', UUIDv4) id: string,
     @Body() dto: AssignModuleDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
@@ -79,7 +82,7 @@ export class RolesController {
 
   @Post(':id/menus')
   assignMenu(
-    @Param('id') id: string,
+    @Param('id', UUIDv4) id: string,
     @Body() dto: AssignMenuDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
@@ -88,8 +91,8 @@ export class RolesController {
 
   @Delete(':id/modules/:moduleId')
   unassignModule(
-    @Param('id') id: string,
-    @Param('moduleId') moduleId: string,
+    @Param('id', UUIDv4) id: string,
+    @Param('moduleId', UUIDv4) moduleId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.rolesService.unassignModule(id, moduleId, user.sub);
@@ -97,8 +100,8 @@ export class RolesController {
 
   @Delete(':id/menus/:menuId')
   unassignMenu(
-    @Param('id') id: string,
-    @Param('menuId') menuId: string,
+    @Param('id', UUIDv4) id: string,
+    @Param('menuId', UUIDv4) menuId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.rolesService.unassignMenu(id, menuId, user.sub);

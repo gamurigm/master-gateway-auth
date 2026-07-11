@@ -1,6 +1,6 @@
 import { IsUUID } from 'class-validator';
 
 export class AssignUserDto {
-  @IsUUID()
+  @IsUUID('4')
   userId!: string;
 }

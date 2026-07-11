@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Query,
@@ -19,6 +20,8 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
+const UUIDv4 = new ParseUUIDPipe({ version: '4' });
+
 @RequireRoles('ADMIN')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
@@ -31,7 +34,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', UUIDv4) id: string) {
     return this.usersService.findOne(id);
   }
 
@@ -42,7 +45,7 @@ export class UsersController {
 
   @Put(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', UUIDv4) id: string,
     @Body() dto: UpdateUserDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
@@ -50,7 +53,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+  remove(@Param('id', UUIDv4) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.usersService.remove(id, user.sub);
   }
 }
