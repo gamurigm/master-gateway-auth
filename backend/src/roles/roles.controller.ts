@@ -34,6 +34,11 @@ export class RolesController {
     return this.rolesService.findAll();
   }
 
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.rolesService.findOne(id);
+  }
+
   @Post()
   create(@Body() dto: CreateRoleDto, @CurrentUser() user: AuthenticatedUser) {
     return this.rolesService.create(dto, user.sub);

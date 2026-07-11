@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Role, CreateRoleDto, UpdateRoleDto } from './api.models';
+import { Role, RoleDetail, CreateRoleDto, UpdateRoleDto } from './api.models';
 
 @Injectable({ providedIn: 'root' })
 export class RolesService {
@@ -11,6 +11,10 @@ export class RolesService {
 
   findAll(): Observable<Role[]> {
     return this.http.get<Role[]>(`${this.apiUrl}/roles`);
+  }
+
+  findOne(id: string): Observable<RoleDetail> {
+    return this.http.get<RoleDetail>(`${this.apiUrl}/roles/${id}`);
   }
 
   create(dto: CreateRoleDto): Observable<Role> {

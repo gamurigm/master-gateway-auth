@@ -1,5 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { RolesService } from '../../core/roles.service';
 import { Role } from '../../core/api.models';
 import { RoleFormComponent } from '../role-form/role-form.component';
@@ -38,6 +39,7 @@ import { RoleFormComponent } from '../role-form/role-form.component';
                 </span>
               </td>
               <td class="td-actions">
+                <button class="icon-btn assign" title="Asignaciones" (click)="goToAssignments(role)">&#9881;</button>
                 <button class="icon-btn edit" title="Editar" (click)="openEdit(role)">&#9998;</button>
                 <button class="icon-btn delete" title="Eliminar" (click)="confirmDelete(role)">&#10005;</button>
               </td>
@@ -71,7 +73,7 @@ import { RoleFormComponent } from '../role-form/role-form.component';
     .crud-table td { padding:14px 20px;font-size:14px;border-bottom:1px solid #f1f5f9;color:var(--text-main) }
     .crud-table tr:last-child td { border-bottom:0 }
     .crud-table tr:hover td { background:#f8fafc }
-    .th-actions,.td-actions { text-align:center;width:100px }
+    .th-actions,.td-actions { text-align:center;width:140px }
     .td-actions { display:flex;gap:8px;justify-content:center }
     .badge { display:inline-block;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:600 }
     .badge-active { background:#dcfce7;color:#166534 }
@@ -79,6 +81,8 @@ import { RoleFormComponent } from '../role-form/role-form.component';
     .icon-btn { width:32px;height:32px;border:0;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;transition:all 0.2s }
     .icon-btn.edit { background:#eff6ff;color:#2563eb }
     .icon-btn.edit:hover { background:#dbeafe }
+    .icon-btn.assign { background:#f0fdf4;color:#16a34a }
+    .icon-btn.assign:hover { background:#dcfce7 }
     .icon-btn.delete { background:#fef2f2;color:#dc2626 }
     .icon-btn.delete:hover { background:#fee2e2 }
     .empty { text-align:center;color:var(--text-muted);padding:40px 20px!important;font-weight:500 }
@@ -86,6 +90,7 @@ import { RoleFormComponent } from '../role-form/role-form.component';
 })
 export class RoleListComponent implements OnInit {
   private readonly rolesService = inject(RolesService);
+  private readonly router = inject(Router);
 
   roles: Role[] = [];
   loading = true;
@@ -108,6 +113,10 @@ export class RoleListComponent implements OnInit {
   openEdit(role: Role) { this.selectedRole = role; this.showForm = true; }
   closeForm() { this.showForm = false; this.selectedRole = null; }
   onSaved() { this.closeForm(); this.loadRoles(); }
+
+  goToAssignments(role: Role) {
+    void this.router.navigate(['/app/roles', role.id]);
+  }
 
   confirmDelete(role: Role) {
     if (confirm(`¿Eliminar rol "${role.name}"?`)) {
