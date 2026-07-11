@@ -1,0 +1,67 @@
+name: Deploy Frontend Test
+
+on:
+  push:
+    branches:
+      - deploy/frontend-test
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout target commit
+        uses: actions/checkout@v4
+
+      - name: Configure Render frontend service
+        id: render_frontend
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_BACKEND_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: bash scripts/configure-render-frontend.sh
+
+      - name: Install Render CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/render-oss/cli/main/bin/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Redeploy backend for CORS
+        if: steps.render_frontend.outputs.backend_redeploy_required == 'true'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_BACKEND_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          render deploys create "$RENDER_BACKEND_SERVICE_ID" \
+            --output json \
+            --confirm \
+            --wait \
+            --commit "$GITHUB_SHA"
+
+      - name: Deploy frontend exact commit
+        env:
+          FRONTEND_SERVICE_ID: ${{ steps.render_frontend.outputs.frontend_id }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          render deploys create "$FRONTEND_SERVICE_ID" \
+            --output json \
+            --confirm \
+            --wait \
+            --commit "$GITHUB_SHA"
+
+      - name: Verify frontend and CORS
+        env:
+          FRONTEND_URL: ${{ steps.render_frontend.outputs.frontend_url }}
+        run: |
+          page=$(curl --fail --show-error --silent \
+            --retry 12 \
+            --retry-all-errors \
+            --retry-delay 5 \
+            "$FRONTEND_URL/")
+          grep -q '<app-root' <<< "$page"
+
+          cors_headers=$(curl --fail --show-error --silent --include \
+            --request OPTIONS \
+            --header "Origin: $FRONTEND_URL" \
+            --header "Access-Control-Request-Method: POST" \
+            https://master-gateway-auth.onrender.com/api/auth/login)
+          grep -qi "access-control-allow-origin: $FRONTEND_URL" <<< "$cors_headers"
