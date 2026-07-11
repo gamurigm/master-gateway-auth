@@ -114,6 +114,30 @@ export class RolesService {
     });
   }
 
+  async unassignModule(roleId: string, moduleId: string, actorId: string) {
+    await this.ensureActiveRole(roleId);
+    await this.ensureActiveModule(moduleId);
+
+    await this.prisma.roleModule.update({
+      where: { roleId_moduleId: { roleId, moduleId } },
+      data: { estado: Estado.INACTIVO, updatedBy: actorId },
+    });
+
+    return { success: true };
+  }
+
+  async unassignMenu(roleId: string, menuId: string, actorId: string) {
+    await this.ensureActiveRole(roleId);
+    await this.ensureActiveMenu(menuId);
+
+    await this.prisma.roleMenu.update({
+      where: { roleId_menuId: { roleId, menuId } },
+      data: { estado: Estado.INACTIVO, updatedBy: actorId },
+    });
+
+    return { success: true };
+  }
+
   private async ensureActiveRole(id: string) {
     const role = await this.prisma.role.findFirst({
       where: { id, estado: Estado.ACTIVO },

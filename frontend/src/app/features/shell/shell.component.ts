@@ -1,17 +1,18 @@
 ﻿import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
-import { Route, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { Route, Router, RouterOutlet } from '@angular/router';
 import { MenuModule, MenuNode } from '../../core/api.models';
 import { AuthService } from '../../core/auth.service';
 import { MenuService } from '../../core/menu.service';
 import { baseAppChildren } from '../../app-route-children';
 import { DashboardComponent } from '../dashboard/dashboard.component';
 import { DynamicPageComponent } from '../dynamic-page/dynamic-page.component';
+import { MenuItemComponent } from './menu-item.component';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterLink, RouterOutlet],
+  imports: [CommonModule, RouterOutlet, MenuItemComponent],
   template: `
     <div class="shell">
       <aside class="sidebar">
@@ -23,13 +24,7 @@ import { DynamicPageComponent } from '../dynamic-page/dynamic-page.component';
         <nav>
           <section *ngFor="let module of modules" class="menu-module">
             <h2>{{ module.name }}</h2>
-            <ng-container *ngFor="let item of module.menus">
-              <a *ngIf="item.url" [routerLink]="item.url">{{ item.name }}</a>
-              <span *ngIf="!item.url" class="group-label">{{ item.name }}</span>
-              <div class="child-menu" *ngIf="item.children.length">
-                <a *ngFor="let child of item.children" [routerLink]="child.url || '/app'">{{ child.name }}</a>
-              </div>
-            </ng-container>
+            <app-menu-item *ngFor="let item of module.menus" [node]="item" />
           </section>
         </nav>
 
@@ -79,29 +74,6 @@ import { DynamicPageComponent } from '../dynamic-page/dynamic-page.component';
         font-size: 13px;
         color: #667085;
         text-transform: uppercase;
-      }
-
-      .menu-module a,
-      .group-label {
-        display: block;
-        color: #172033;
-        text-decoration: none;
-        border-radius: 6px;
-        padding: 9px 10px;
-      }
-
-      .menu-module a:hover {
-        background: #eef4ff;
-      }
-
-      .group-label {
-        font-weight: 700;
-      }
-
-      .child-menu {
-        margin-left: 12px;
-        border-left: 1px solid #d8deea;
-        padding-left: 8px;
       }
 
       .workspace {

@@ -118,31 +118,62 @@ jobs:
             reports/codebert-sast.json
             reports/codebert-changed-files.txt
 
+      - name: Parse SAST Report for Telegram
+        if: failure()
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+          {
+            echo "COMMIT_MSG<<EOF"
+            echo "$COMMIT_MSG"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+          if [ -f reports/codebert-sast.json ]; then
+            VULN_DETAILS=$(jq -r '.files[] | select(.status == "VULNERABLE") | "- Archivo: \(.path)\n  Reglas:\n\(.rules[] | "    * \(.rule_id) (\(.severity)): \(.message)")\n"' reports/codebert-sast.json | head -c 3000)
+            if [ -z "$VULN_DETAILS" ]; then
+              VULN_DETAILS="No se pudo extraer el detalle de las vulnerabilidades."
+            fi
+          else
+            VULN_DETAILS="Reporte JSON no encontrado."
+          fi
+          {
+            echo "VULN_DETAILS<<EOF"
+            echo "$VULN_DETAILS"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Alert Telegram on SAST vulnerability
         if: failure()
-        uses: appleboy/telegram-action@master
+        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
           message: |
-            ⚠️ ALERTA SAST/ML - Master Gateway
+            ⚠️ *ALERTA SAST/ML - Master Gateway*
 
-            CodeBERT detectó patrones de código vulnerable.
-            El pipeline ha sido BLOQUEADO.
+            CodeBERT detectó patrones de código vulnerable. El pipeline ha sido BLOQUEADO.
 
-            Rama: ${{ github.ref_name }}
-            Commit: ${{ github.sha }}
-            Autor: ${{ github.actor }}
+            *Autor:* ${{ github.actor }}
+            *Rama:* ${{ github.ref_name }}
+            *Commit:* ${{ github.sha }}
+            *Mensaje:* ${{ env.COMMIT_MSG }}
 
-            Revisa el reporte en:
+            *Vulnerabilidades Detectadas:*
+            ```
+            ${{ env.VULN_DETAILS }}
+            ```
+
+            Revisa el reporte completo en:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
   sonarqube:
+    name: sonarqube-community
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - build-test
       - codebert-sast
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/master_gateway?schema=public
       SONAR_HOST_URL: http://localhost:9000
@@ -166,8 +197,10 @@ jobs:
 
       - name: Start SonarQube Community
         run: |
+          set -euo pipefail
           docker compose up -d sonar-db sonarqube
           echo "Waiting for SonarQube to be ready..."
+          STATUS="DOWN"
           for i in $(seq 1 60); do
             STATUS=$(curl -s -f "http://localhost:9000/api/system/status" 2>/dev/null | jq -r '.status' 2>/dev/null || echo "DOWN")
             if [ "$STATUS" = "UP" ]; then
@@ -177,6 +210,11 @@ jobs:
             echo "Attempt $i: status=$STATUS, waiting 10s..."
             sleep 10
           done
+          if [ "$STATUS" != "UP" ]; then
+            echo "::error::SonarQube Community did not become ready"
+            docker compose logs --no-color --tail=100 sonar-db sonarqube
+            exit 1
+          fi
 
       - name: Generate SonarQube token
         run: |
@@ -187,10 +225,43 @@ jobs:
             docker compose logs sonarqube --tail=20
             exit 1
           fi
-          echo "SONAR_TOKEN=$TOKEN" >> $GITHUB_ENV
+          echo "SONAR_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
       - name: SonarQube analysis
-        run: npm run sonar:scan -- -Dsonar.login=${{ env.SONAR_TOKEN }}
+        id: sonar_analysis
+        continue-on-error: true
+        run: npm run sonar:scan -- -Dsonar.token="$SONAR_TOKEN"
+
+      - name: Read SonarQube Quality Gate
+        if: always()
+        run: |
+          STATUS=$(curl -s -f -u "$SONAR_TOKEN:" \
+            "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=master-gateway" \
+            | jq -r '.projectStatus.status' 2>/dev/null || echo "UNKNOWN")
+          echo "SONAR_GATE_STATUS=$STATUS" >> "$GITHUB_ENV"
+          echo "SonarQube Community Quality Gate: $STATUS"
+
+      - name: Notify SonarQube Quality Gate
+        if: always()
+        continue-on-error: true
+        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            SonarQube Community - Quality Gate: ${{ env.SONAR_GATE_STATUS }}
+
+            Commit: ${{ github.sha }}
+            Autor: ${{ github.actor }}
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Enforce SonarQube Quality Gate
+        if: always()
+        run: |
+          if [ "${{ steps.sonar_analysis.outcome }}" != "success" ] || [ "$SONAR_GATE_STATUS" != "OK" ]; then
+            echo "::error::SonarQube Community Quality Gate failed: $SONAR_GATE_STATUS"
+            exit 1
+          fi
 
       - name: Stop SonarQube
         if: always()
@@ -204,7 +275,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Notify Telegram
-        uses: appleboy/telegram-action@master
+        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -227,7 +298,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Notify Telegram
-        uses: appleboy/telegram-action@master
+        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -254,17 +325,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy to Render
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+      - name: Install Render CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/render-oss/cli/main/bin/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Deploy to Render via CLI
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          render deploys create ${{ secrets.RENDER_SERVICE_ID }} --confirm --wait
 
       - name: Notify deploy result
-        if: success()
+        if: always()
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            Master Gateway desplegado en Render
+            Master Gateway - Despliegue en Render terminado.
 
+            Resultado: ${{ job.status }}
             Commit: ${{ github.sha }}
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

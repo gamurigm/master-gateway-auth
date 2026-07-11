@@ -153,6 +153,10 @@ reports/codebert-sast.json
 El modelo por defecto es `mrm8488/codebert-base-finetuned-detect-insecure-code`, un CodeBERT fine-tuned para deteccion de codigo inseguro. Ver detalles en `docs/codebert-sast.md`.
 ## SonarQube local
 
+El mismo `sonarqube:community` se levanta de forma temporal dentro del job de
+GitHub Actions para analizar `main` y bloquear el despliegue si falla el Quality
+Gate. SonarQube Cloud no forma parte del workflow.
+
 ```powershell
 wsl -e docker compose up -d sonar-db sonarqube
 $env:SONAR_HOST_URL = "http://localhost:9000"
