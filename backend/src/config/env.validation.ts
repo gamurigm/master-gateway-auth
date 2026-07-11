@@ -7,6 +7,7 @@ const DEVELOPMENT_DEFAULTS: Record<string, string> = {
   JWT_AUDIENCE: 'master-gateway-clients',
   JWT_PRIVATE_KEY_PATH: './keys/private.pem',
   JWT_PUBLIC_KEY_PATH: './keys/public.pem',
+  JWE_SECRET: 'change-me-jwe-secret-32-bytes!!!',
   INTERNAL_API_KEY: 'change-me-internal-key',
   INTERNAL_ALLOWED_SERVICES: 'ventas',
 };
@@ -15,6 +16,7 @@ const REQUIRED_KEYS = [
   'DATABASE_URL',
   'INTERNAL_API_KEY',
   'INTERNAL_ALLOWED_SERVICES',
+  'JWE_SECRET',
 ] as const;
 
 export function validateEnv(config: Record<string, unknown>) {
@@ -36,6 +38,10 @@ export function validateEnv(config: Record<string, unknown>) {
     if (isProduction && value.startsWith('change-me')) {
       throw new Error(`Unsafe default secret configured in production: ${key}`);
     }
+  }
+
+  if (Buffer.byteLength(next['JWE_SECRET'] as string, 'utf8') !== 32) {
+    throw new Error('JWE_SECRET must be exactly 32 bytes for A256GCM');
   }
 
   return next;

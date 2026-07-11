@@ -80,6 +80,27 @@ export interface Role {
   updatedAt: string;
 }
 
+export interface RoleUser {
+  id: string;
+  user: { id: string; email: string; firstName: string; lastName?: string | null };
+}
+
+export interface RoleModuleAssignment {
+  id: string;
+  module: { id: string; code: string; name: string; description?: string | null };
+}
+
+export interface RoleMenuAssignment {
+  id: string;
+  menu: { id: string; name: string; url?: string | null; icon?: string | null; order: number };
+}
+
+export interface RoleDetail extends Role {
+  users: RoleUser[];
+  modules: RoleModuleAssignment[];
+  menus: RoleMenuAssignment[];
+}
+
 export interface CreateRoleDto {
   name: string;
   description?: string;

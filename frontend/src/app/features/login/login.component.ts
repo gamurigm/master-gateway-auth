@@ -3,18 +3,23 @@ import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { AppIconComponent } from '../../shared/app-icon.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AppIconComponent],
   template: `
     <main class="auth-page">
       <section class="auth-panel">
+        <div class="auth-brand">
+          <span class="auth-brand-mark"><app-icon name="lucideShieldCheck" [size]="22" /></span>
+          <strong>Master Gateway</strong>
+        </div>
         <h1>Master Gateway</h1>
-        <p>Ingresa tus credenciales para seleccionar el rol de trabajo.</p>
+        <p>Accede al centro de control de identidades, roles y permisos.</p>
 
-        <div class="error" *ngIf="error">{{ error }}</div>
+        <div class="error" *ngIf="error"><app-icon name="lucideCircleAlert" />{{ error }}</div>
 
         <form (ngSubmit)="submit()">
           <div class="field">
@@ -24,11 +29,17 @@ import { AuthService } from '../../core/auth.service';
 
           <div class="field">
             <label for="password">Contrasena</label>
-            <input id="password" name="password" type="password" autocomplete="current-password" [(ngModel)]="password" required>
+            <div class="input-action">
+              <input id="password" name="password" [type]="showPassword ? 'text' : 'password'" autocomplete="current-password" [(ngModel)]="password" required>
+              <button class="icon-btn" type="button" (click)="showPassword = !showPassword" [title]="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'">
+                <app-icon [name]="showPassword ? 'lucideEyeOff' : 'lucideEye'" />
+              </button>
+            </div>
           </div>
 
           <button class="primary-button" type="submit" [disabled]="loading">
-            {{ loading ? 'Validando...' : 'Ingresar' }}
+            <app-icon *ngIf="loading" name="lucideLoaderCircle" class="spin" />
+            {{ loading ? 'Validando' : 'Ingresar' }}
           </button>
         </form>
       </section>
@@ -41,6 +52,7 @@ export class LoginComponent {
 
   email = '';
   password = '';
+  showPassword = false;
   loading = false;
   error = '';
 
@@ -60,4 +72,3 @@ export class LoginComponent {
     });
   }
 }
-

@@ -1,65 +1,73 @@
 import { UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { EncryptJWT } from 'jose';
 import { JwtAuthGuard } from './jwt-auth.guard';
+
+const JWE_SECRET = 'test-jwe-secret-exactly-32-bytes';
 
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
-  let jwtService: JwtService;
 
   const mockContext = (authorization?: string) => {
-    const request = { headers: { authorization } };
+    const request = { headers: { authorization }, user: undefined as unknown };
     return {
-      switchToHttp: () => ({
-        getRequest: () => request,
-      }),
-    } as any;
+      request,
+      context: {
+        switchToHttp: () => ({ getRequest: () => request }),
+      } as any,
+    };
   };
 
   beforeEach(() => {
-    jwtService = { verifyAsync: jest.fn() } as any;
-    guard = new JwtAuthGuard(jwtService);
-  });
-
-  it('allows access with valid Bearer token', async () => {
-    const context = mockContext('Bearer valid-token');
-    (jwtService.verifyAsync as jest.Mock).mockResolvedValue({ sub: 'user-id', roleId: 'role-id' });
-
-    const result = await guard.canActivate(context);
-
-    expect(result).toBe(true);
-  });
-
-  it('throws UnauthorizedException when no Authorization header', async () => {
-    const context = mockContext();
-
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
-  });
-
-  it('throws UnauthorizedException when header does not start with Bearer', async () => {
-    const context = mockContext('Basic token');
-
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
-  });
-
-  it('throws UnauthorizedException when token is invalid or expired', async () => {
-    const context = mockContext('Bearer bad-token');
-    (jwtService.verifyAsync as jest.Mock).mockRejectedValue(new Error('Token expired'));
-
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
-  });
-
-  it('sets user on request when token is valid', async () => {
-    const request = { headers: { authorization: 'Bearer valid-token' } } as { headers: { authorization: string }; user?: unknown };
-    const context = {
-      switchToHttp: () => ({
-        getRequest: () => request,
+    guard = new JwtAuthGuard(
+      new ConfigService({
+        JWE_SECRET,
+        JWT_ISSUER: 'master-gateway',
+        JWT_AUDIENCE: 'master-gateway-clients',
       }),
-    } as any;
-    const payload = { sub: 'user-id', roleId: 'role-id', roleName: 'ADMIN' };
-    (jwtService.verifyAsync as jest.Mock).mockResolvedValue(payload);
+    );
+  });
 
-    await guard.canActivate(context);
+  it('allows access and attaches claims from a valid JWE', async () => {
+    const token = await createAccessToken();
+    const { context, request } = mockContext(`Bearer ${token}`);
 
-    expect(request.user).toEqual(payload);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.user).toMatchObject({
+      sub: 'user-id',
+      roleId: 'role-id',
+      roleName: 'ADMIN',
+    });
+  });
+
+  it.each([undefined, 'Basic token'])(
+    'rejects a missing or malformed Authorization header',
+    async (authorization) => {
+      const { context } = mockContext(authorization);
+      await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    },
+  );
+
+  it('rejects invalid tokens', async () => {
+    const { context } = mockContext('Bearer invalid-token');
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 });
+
+function createAccessToken() {
+  return new EncryptJWT({
+    sub: 'user-id',
+    roleId: 'role-id',
+    roleName: 'ADMIN',
+  })
+    .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+    .setIssuedAt()
+    .setExpirationTime('5m')
+    .setIssuer('master-gateway')
+    .setAudience('master-gateway-clients')
+    .encrypt(new TextEncoder().encode(JWE_SECRET));
+}

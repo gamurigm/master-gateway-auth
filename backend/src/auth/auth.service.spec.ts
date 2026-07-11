@@ -1,9 +1,11 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { generateKeyPairSync } from 'node:crypto';
 import type { Algorithm } from 'jsonwebtoken';
+import { jwtDecrypt } from 'jose';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 
@@ -11,6 +13,7 @@ const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ROLE_ID = '22222222-2222-2222-2222-222222222222';
 const EMAIL = 'admin@example.com';
 const PASSWORD = 'Admin12345!';
+const JWE_SECRET = 'test-jwe-secret-exactly-32-bytes';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
@@ -77,6 +80,11 @@ describe('AuthService', () => {
     service = new AuthService(
       prisma as unknown as PrismaService,
       jwtService,
+      new ConfigService({
+        JWE_SECRET,
+        JWT_ISSUER: 'master-gateway',
+        JWT_AUDIENCE: 'master-gateway-clients',
+      }),
     );
     prisma.refreshToken.create.mockResolvedValue({});
     prisma.refreshToken.update.mockResolvedValue({});
@@ -137,7 +145,14 @@ describe('AuthService', () => {
     });
 
     const result = await service.selectRole({ tempToken, roleId: ROLE_ID });
-    const accessPayload = jwtService.decode(result.accessToken) as AccessTokenPayload;
+    const { payload: accessPayload } = await jwtDecrypt(
+      result.accessToken,
+      new TextEncoder().encode(JWE_SECRET),
+      {
+        issuer: 'master-gateway',
+        audience: 'master-gateway-clients',
+      },
+    );
 
     expect(accessPayload).toMatchObject({
       sub: USER_ID,
@@ -243,6 +258,30 @@ describe('AuthService', () => {
     await expect(
       service.validateInternal('test-internal-key', 'token', 'reportes'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('validateInternal accepts a valid JWE for an allowed service', async () => {
+    const tempToken = await jwtService.signAsync(
+      { sub: USER_ID, email: EMAIL },
+      { expiresIn: '5m' },
+    );
+    prisma.userRole.findFirst.mockResolvedValue({
+      role: { id: ROLE_ID, name: 'ADMIN' },
+    });
+    const session = await service.selectRole({ tempToken, roleId: ROLE_ID });
+
+    await expect(
+      service.validateInternal(
+        'test-internal-key',
+        session.accessToken,
+        'ventas',
+      ),
+    ).resolves.toMatchObject({
+      valid: true,
+      userId: USER_ID,
+      roleId: ROLE_ID,
+      roleName: 'ADMIN',
+    });
   });
 
   const createRefreshToken = (jti: string) =>
