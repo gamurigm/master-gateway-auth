@@ -8,7 +8,10 @@ import { MenuNode } from '../../core/api.models';
   standalone: true,
   imports: [CommonModule, RouterLink],
   template: `
-    <a *ngIf="node.url" [routerLink]="node.url" class="menu-link">{{ node.name }}</a>
+    <a *ngIf="node.url && isInternal(node.url)" [routerLink]="node.url" class="menu-link">{{ node.name }}</a>
+    <a *ngIf="node.url && !isInternal(node.url)" [href]="node.url" class="menu-link" target="_self" rel="noreferrer">
+      {{ node.name }}
+    </a>
     <span *ngIf="!node.url" class="group-label">{{ node.name }}</span>
     <div class="child-menu" *ngIf="node.children.length">
       <app-menu-item *ngFor="let child of node.children" [node]="child" />
@@ -50,4 +53,8 @@ import { MenuNode } from '../../core/api.models';
 })
 export class MenuItemComponent {
   @Input({ required: true }) node!: MenuNode;
+
+  isInternal(url: string) {
+    return url.startsWith('/app/');
+  }
 }
