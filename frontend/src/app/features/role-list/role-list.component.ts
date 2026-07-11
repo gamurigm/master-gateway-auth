@@ -53,7 +53,7 @@ import { RoleFormComponent } from '../role-form/role-form.component';
     <app-role-form
       *ngIf="showForm"
       [role]="selectedRole"
-      (close)="closeForm()"
+      (closed)="closeForm()"
       (saved)="onSaved()"
     />
   `,

@@ -13,7 +13,43 @@ on:
       - main
 
 jobs:
+  # ──────────────────────────────────────────────────────────────
+  # ESTRATEGIA 1: Detectar si hay cambios en código fuente
+  # Permite fast-path para commits de docs/config
+  # ──────────────────────────────────────────────────────────────
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has_code: ${{ steps.filter.outputs.has_code }}
+      has_security_relevant: ${{ steps.filter.outputs.has_security_relevant }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            has_code:
+              - 'backend/src/**/*.ts'
+              - 'frontend/src/**/*.ts'
+              - 'frontend/src/**/*.tsx'
+              - 'frontend/src/**/*.html'
+              - 'services/**/*.ts'
+            has_security_relevant:
+              - 'backend/src/**/*.ts'
+              - 'frontend/src/**/*.ts'
+              - 'frontend/src/**/*.tsx'
+              - 'services/**/*.ts'
+              - 'backend/prisma/schema.prisma'
+              - 'security/**'
+
+  # ──────────────────────────────────────────────────────────────
+  # Build + Tests (siempre corre, es la base de todo)
+  # ──────────────────────────────────────────────────────────────
   build-test:
+    needs: detect-changes
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/master_gateway?schema=public
@@ -59,121 +95,20 @@ jobs:
       - name: Frontend build
         run: npm run build:frontend
 
-  codebert-sast:
-    needs: build-test
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    env:
-      CODEBERT_MODEL: mahdin70/CodeBERT-PrimeVul-BigVul
-      CODEBERT_THRESHOLD: "0.999"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Restore Hugging Face cache
-        uses: actions/cache@v4
-        with:
-          path: .cache/huggingface
-          key: codebert-${{ runner.os }}-${{ hashFiles('security/codebert-sast/requirements.txt') }}
-          restore-keys: |
-            codebert-${{ runner.os }}-
-
-      - name: Prepare changed files
-        shell: bash
-        run: |
-          mkdir -p reports .cache/huggingface
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin "${{ github.base_ref }}"
-            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > reports/codebert-changed-files-all.txt
-            grep -E '\.(c|cc|cpp|cxx|h|hpp|java|js|jsx|py|rs|ts|tsx)$' reports/codebert-changed-files-all.txt | grep -v '^scripts/' > reports/codebert-changed-files.txt || true
-          else
-            find backend/src frontend/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files.txt
-          fi
-          cat reports/codebert-changed-files.txt
-
-      - name: Build CodeBERT SAST image
-        run: docker build -f security/codebert-sast/Dockerfile -t master-gateway-codebert-sast .
-
-      - name: Run CodeBERT SAST gate
-        run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            -v "$PWD/.cache/huggingface:/cache/huggingface" \
-            -e HF_HOME=/cache/huggingface \
-            -e CODEBERT_MODEL="$CODEBERT_MODEL" \
-            -e CODEBERT_THRESHOLD="$CODEBERT_THRESHOLD" \
-            master-gateway-codebert-sast \
-            --changed-files reports/codebert-changed-files.txt \
-            --report reports/codebert-sast.json
-
-      - name: Upload CodeBERT report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: codebert-sast-report
-          path: |
-            reports/codebert-sast.json
-            reports/codebert-changed-files.txt
-
-      - name: Parse SAST Report for Telegram
-        if: failure()
-        run: |
-          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
-          {
-            echo "COMMIT_MSG<<EOF"
-            echo "$COMMIT_MSG"
-            echo "EOF"
-          } >> "$GITHUB_ENV"
-
-          if [ -f reports/codebert-sast.json ]; then
-            VULN_DETAILS=$(jq -r '.files[] | select(.status == "VULNERABLE") | "- Archivo: \(.path)\n  Reglas:\n\(.rules[] | "    * \(.rule_id) (\(.severity)): \(.message)")\n"' reports/codebert-sast.json | head -c 3000)
-            if [ -z "$VULN_DETAILS" ]; then
-              VULN_DETAILS="No se pudo extraer el detalle de las vulnerabilidades."
-            fi
-          else
-            VULN_DETAILS="Reporte JSON no encontrado."
-          fi
-          {
-            echo "VULN_DETAILS<<EOF"
-            echo "$VULN_DETAILS"
-            echo "EOF"
-          } >> "$GITHUB_ENV"
-
-      - name: Alert Telegram on SAST vulnerability
-        if: failure()
-        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
-        with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          format: markdown
-          message: |
-            ⚠️ *ALERTA SAST/ML - Master Gateway*
-
-            CodeBERT detectó patrones de código vulnerable. El pipeline ha sido BLOQUEADO.
-
-            *Autor:* ${{ github.actor }}
-            *Rama:* ${{ github.ref_name }}
-            *Commit:* ${{ github.sha }}
-            *Mensaje:* ${{ env.COMMIT_MSG }}
-
-            *Vulnerabilidades Detectadas:*
-            ```
-            ${{ env.VULN_DETAILS }}
-            ```
-
-            Revisa el reporte completo en:
-            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  # ──────────────────────────────────────────────────────────────
+  # ESTRATEGIA 2 + 4: SonarQube corre ANTES de CodeBERT en main
+  # y produce gate_status como output para el filtro condicional
+  # ──────────────────────────────────────────────────────────────
   sonarqube:
     name: sonarqube-community
+    # ESTRATEGIA 4: Solo en push a main (rigor máximo)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - build-test
-      - codebert-sast
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    outputs:
+      gate_status: ${{ steps.read_gate.outputs.gate_status }}
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/master_gateway?schema=public
       SONAR_HOST_URL: http://localhost:9000
@@ -236,6 +171,7 @@ jobs:
         run: npm run sonar:scan -- -Dsonar.token="$SONAR_TOKEN"
 
       - name: Read SonarQube Quality Gate
+        id: read_gate
         if: always()
         run: |
           STATUS="UNKNOWN"
@@ -244,7 +180,7 @@ jobs:
               "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=master-gateway" 2>/dev/null || true)
             STATUS=$(echo "$RESPONSE" | jq -r '.projectStatus.status // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
           fi
-          echo "SONAR_GATE_STATUS=$STATUS" >> "$GITHUB_ENV"
+          echo "gate_status=$STATUS" >> "$GITHUB_OUTPUT"
           echo "SonarQube Community Quality Gate: $STATUS"
 
       - name: Notify SonarQube Quality Gate
@@ -255,7 +191,7 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            SonarQube Community - Quality Gate: ${{ env.SONAR_GATE_STATUS }}
+            SonarQube Community - Quality Gate: ${{ steps.read_gate.outputs.gate_status }}
 
             Commit: ${{ github.sha }}
             Autor: ${{ github.actor }}
@@ -264,7 +200,7 @@ jobs:
       - name: Enforce SonarQube Quality Gate
         if: always()
         run: |
-          GATE="${SONAR_GATE_STATUS:-UNKNOWN}"
+          GATE="${{ steps.read_gate.outputs.gate_status }}"
           echo "Quality Gate status: $GATE"
           if [ "${{ steps.sonar_analysis.outcome }}" = "success" ]; then
             if [ "$GATE" = "OK" ]; then
@@ -283,10 +219,208 @@ jobs:
         if: always()
         run: docker compose down sonar-db sonarqube
 
-  telegram-notify-dev-test:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/test')
+  # ──────────────────────────────────────────────────────────────
+  # ESTRATEGIA 1+2+3+4: CodeBERT SAST condicional
+  #
+  # ESTRATEGIA 4 (branch): En dev NUNCA corre. En test corre si
+  #   hay cambios de código. En main corre solo si el gate de
+  #   SonarQube NO es OK (estrategia 2).
+  #
+  # ESTRATEGIA 1 (fast-path): Se salta si no hay cambios de código
+  #
+  # ESTRATEGIA 3 (hash cache): Se salta si el hash de archivos
+  #   fuente no cambió desde la última ejecución exitosa
+  # ──────────────────────────────────────────────────────────────
+  codebert-sast:
+    needs: [build-test, detect-changes, sonarqube]
+    # ESTRATEGIA 1: Solo ejecutar si hay código fuente changed
+    # ESTRATEGIA 4: En dev nunca. En test siempre. En main solo si gate != OK
+    if: |
+      always() &&
+      needs.build-test.result == 'success' &&
+      needs.detect-changes.outputs.has_code == 'true' &&
+      (
+        (github.event_name == 'pull_request') ||
+        (github.ref == 'refs/heads/test') ||
+        (github.ref == 'refs/heads/main' && needs.sonarqube.outputs.gate_status != 'OK' && needs.sonarqube.outputs.gate_status != 'NONE')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CODEBERT_MODEL: mahdin70/CodeBERT-PrimeVul-BigVul
+      CODEBERT_THRESHOLD: "0.999"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore Hugging Face cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: codebert-hf-${{ runner.os }}-${{ hashFiles('security/codebert-sast/requirements.txt') }}
+          restore-keys: |
+            codebert-hf-${{ runner.os }}-
+
+      # ESTRATEGIA 3: Hash de archivos fuente como cache key
+      - name: Compute source hash
+        id: source_hash
+        shell: bash
+        run: |
+          HASH=$(find backend/src frontend/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \) 2>/dev/null | sort | xargs md5sum 2>/dev/null | md5sum | cut -d' ' -f1)
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+          echo "Source files hash: $HASH"
+
+      - name: Restore SAST results cache
+        id: sast_cache
+        uses: actions/cache@v4
+        with:
+          path: reports/codebert-sast-cache.json
+          key: sast-result-${{ steps.source_hash.outputs.hash }}
+
+      - name: Prepare changed files
+        if: steps.sast_cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p reports .cache/huggingface
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}"
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > reports/codebert-changed-files-all.txt
+            grep -E '\.(c|cc|cpp|cxx|h|hpp|java|js|jsx|py|rs|ts|tsx)$' reports/codebert-changed-files-all.txt | grep -v '^scripts/' > reports/codebert-changed-files.txt || true
+          else
+            find backend/src frontend/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files.txt
+          fi
+          cat reports/codebert-changed-files.txt
+
+      - name: Build CodeBERT SAST image
+        if: steps.sast_cache.outputs.cache-hit != 'true'
+        run: docker build -f security/codebert-sast/Dockerfile -t master-gateway-codebert-sast .
+
+      - name: Run CodeBERT SAST gate
+        if: steps.sast_cache.outputs.cache-hit != 'true'
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -v "$PWD/.cache/huggingface:/cache/huggingface" \
+            -e HF_HOME=/cache/huggingface \
+            -e CODEBERT_MODEL="$CODEBERT_MODEL" \
+            -e CODEBERT_THRESHOLD="$CODEBERT_THRESHOLD" \
+            master-gateway-codebert-sast \
+            --changed-files reports/codebert-changed-files.txt \
+            --report reports/codebert-sast.json
+
+      # Guardar resultado en cache para futuras ejecuciones con mismo hash
+      - name: Cache SAST result
+        if: steps.sast_cache.outputs.cache-hit != 'true' && always()
+        shell: bash
+        run: |
+          if [ -f reports/codebert-sast.json ]; then
+            cp reports/codebert-sast.json reports/codebert-sast-cache.json
+          fi
+
+      - name: Restore cached result if hit
+        if: steps.sast_cache.outputs.cache-hit == 'true'
+        shell: bash
+        run: |
+          echo "SAST result cache hit! Hash: ${{ steps.source_hash.outputs.hash }}"
+          cp reports/codebert-sast-cache.json reports/codebert-sast.json 2>/dev/null || true
+
+      - name: Upload CodeBERT report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codebert-sast-report
+          path: |
+            reports/codebert-sast.json
+            reports/codebert-changed-files.txt
+
+      - name: Parse SAST Report for Telegram
+        if: failure()
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+          {
+            echo "COMMIT_MSG<<EOF"
+            echo "$COMMIT_MSG"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+          if [ -f reports/codebert-sast.json ]; then
+            VULN_DETAILS=$(jq -r '.files[] | select(.status == "VULNERABLE") | "- Archivo: \(.path)\n  Reglas:\n\(.rules[] | "    * \(.rule_id) (\(.severity)): \(.message)")\n"' reports/codebert-sast.json | head -c 3000)
+            if [ -z "$VULN_DETAILS" ]; then
+              VULN_DETAILS="No se pudo extraer el detalle de las vulnerabilidades."
+            fi
+          else
+            VULN_DETAILS="Reporte JSON no encontrado."
+          fi
+          {
+            echo "VULN_DETAILS<<EOF"
+            echo "$VULN_DETAILS"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Alert Telegram on SAST vulnerability
+        if: failure()
+        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            ⚠️ *ALERTA SAST/ML - Master Gateway*
+
+            CodeBERT detectó patrones de código vulnerable. El pipeline ha sido BLOQUEADO.
+
+            *Autor:* ${{ github.actor }}
+            *Rama:* ${{ github.ref_name }}
+            *Commit:* ${{ github.sha }}
+            *Mensaje:* ${{ env.COMMIT_MSG }}
+
+            *Vulnerabilidades Detectadas:*
+            ```
+            ${{ env.VULN_DETAILS }}
+            ```
+
+            Revisa el reporte completo en:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  # ──────────────────────────────────────────────────────────────
+  # Notificaciones (adaptadas a la nueva estructura)
+  # ──────────────────────────────────────────────────────────────
+  telegram-notify-dev:
+    if: |
+      always() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/dev' &&
+      needs.build-test.result != 'cancelled'
     needs:
       - build-test
+      - detect-changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Telegram
+        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            Master Gateway - push a dev (fast-path)
+
+            Build/Test: ${{ needs.build-test.result }}
+            Código detectado: ${{ needs.detect-changes.outputs.has_code }}
+            Commit: ${{ github.sha }}
+            Autor: ${{ github.actor }}
+
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  telegram-notify-test:
+    if: |
+      always() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/test' &&
+      needs.build-test.result != 'cancelled'
+    needs:
+      - build-test
+      - detect-changes
       - codebert-sast
     runs-on: ubuntu-latest
     steps:
@@ -296,7 +430,7 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            Master Gateway - push a ${{ github.ref_name }}
+            Master Gateway - push a test
 
             Build/Test: ${{ needs.build-test.result }}
             CodeBERT SAST: ${{ needs.codebert-sast.result }}
@@ -306,11 +440,15 @@ jobs:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   telegram-notify-main:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      always() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.build-test.result != 'cancelled'
     needs:
       - build-test
-      - codebert-sast
+      - detect-changes
       - sonarqube
+      - codebert-sast
     runs-on: ubuntu-latest
     steps:
       - name: Notify Telegram
@@ -319,23 +457,55 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            Master Gateway - main
+            Master Gateway - main (rigor completo)
 
             Build/Test: ${{ needs.build-test.result }}
+            SonarQube: ${{ needs.sonarqube.result }} (gate: ${{ needs.sonarqube.outputs.gate_status }})
             CodeBERT SAST: ${{ needs.codebert-sast.result }}
-            SonarQube: ${{ needs.sonarqube.result }}
             Commit: ${{ github.sha }}
             Autor: ${{ github.actor }}
 
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-  deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.sonarqube.result == 'success'
+  telegram-notify-pr:
+    if: always() && github.event_name == 'pull_request'
     needs:
       - build-test
+      - detect-changes
       - codebert-sast
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Telegram
+        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            Master Gateway - PR #${{ github.event.pull_request.number }}
+
+            Build/Test: ${{ needs.build-test.result }}
+            CodeBERT SAST: ${{ needs.codebert-sast.result }}
+            Commit: ${{ github.sha }}
+            Autor: ${{ github.actor }}
+
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  # ──────────────────────────────────────────────────────────────
+  # Deploy (solo main, requiere sonarqube OK o skip)
+  # ──────────────────────────────────────────────────────────────
+  deploy:
+    # ESTRATEGIA 4: Solo en main. ESTRATEGIA 2: deploy requiere
+    # sonarqube exitoso O que el gate haya sido OK (ya aprobado)
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.build-test.result == 'success' &&
+      (needs.sonarqube.result == 'success' || needs.sonarqube.outputs.gate_status == 'OK')
+    needs:
+      - build-test
+      - detect-changes
       - sonarqube
-      - telegram-notify-main
+      - codebert-sast
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
