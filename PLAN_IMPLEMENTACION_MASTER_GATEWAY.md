@@ -39,26 +39,27 @@ Si el equipo ya eligio otro stack, la equivalencia principal seria:
 ## 3. Decisiones tecnicas clave antes de codificar
 
 1. Ruta oficial para menu dinamico:
+
    - El diagrama usa `GET /api/menu/structure`.
    - La tabla oficial usa `GET /api/menus/tree`.
    - Decision recomendada: implementar `GET /api/menus/tree` y documentarlo como endpoint canonico.
-
 2. Estrategia JWT:
+
    - MVP: JWT firmado por el Master y validado en cada endpoint.
    - Recomendado para Zero Trust: RS256 con llave privada en Master y llave publica para microservicios hijos.
    - Mantener tambien `POST /api/internals/validate-token` porque el PDF lo exige.
-
 3. Estado y eliminacion:
+
    - Todas las entidades deben tener `estado`.
    - No hacer hard delete en usuarios, roles, modulos ni menus.
    - Para tablas pivote, usar auditoria y marcar relaciones como inactivas. Si el docente exige delete fisico en pivote, agregar una tabla de auditoria para no perder trazabilidad.
-
 4. Token despues de seleccionar rol:
+
    - El JWT final solo debe incluir el rol activo y permisos de ese rol.
    - No incluir todos los roles del usuario.
    - Claims recomendados: `sub`, `roleId`, `roleName`, `jti`, `iss`, `aud`, `iat`, `exp`.
-
 5. Seguridad en frontend:
+
    - El login no debe enviar al dashboard directamente.
    - Despues del login se muestra el selector de workspace/rol.
    - El menu y rutas se construyen desde el JSON devuelto por backend.
@@ -74,43 +75,44 @@ Todas las tablas deben incluir campos comunes:
 - `creado_por`: UUID nullable.
 - `actualizado_por`: UUID nullable.
 
-Tablas principales:
+Tablas principales:dale )revisa e
 
 - `usuarios`
+
   - `id`
   - `email`
   - `password_hash`
   - `nombres`
   - `apellidos`
   - campos comunes
-
 - `roles`
+
   - `id`
   - `nombre`
   - `descripcion`
   - campos comunes
-
 - `usuario_roles`
+
   - `id`
   - `usuario_id`
   - `rol_id`
   - campos comunes
   - indice unico parcial recomendado: usuario y rol activos no repetidos.
-
 - `modulos`
+
   - `id`
   - `nombre`
   - `descripcion`
   - `codigo`
   - campos comunes
-
 - `rol_modulos`
+
   - `id`
   - `rol_id`
   - `modulo_id`
   - campos comunes
-
 - `menus`
+
   - `id`
   - `nombre`
   - `url`
@@ -119,14 +121,14 @@ Tablas principales:
   - `orden`
   - `icono`
   - campos comunes
-
 - `rol_menus`
+
   - `id`
   - `rol_id`
   - `menu_id`
   - campos comunes
-
 - `refresh_tokens`
+
   - `id`
   - `usuario_id`
   - `rol_id`
@@ -624,13 +626,15 @@ Pasos:
 10. Mover todos los secrets a variables de entorno.
 11. Agregar validacion de variables de entorno al arranque.
 12. Agregar pruebas de seguridad:
-   - intento de SQL injection
-   - acceso a rol ajeno
-   - acceso a menu ajeno
-   - token expirado
-   - refresh reutilizado
-   - password debil
-13. Agregar analisis de dependencias vulnerables.
+
+- intento de SQL injection
+- acceso a rol ajeno
+- acceso a menu ajeno
+- token expirado
+- refresh reutilizado
+- password debil
+
+1. Agregar analisis de dependencias vulnerables.
 
 Criterio de salida:
 
@@ -927,4 +931,3 @@ El proyecto esta listo cuando:
 7. El sistema tiene auditoria, soft delete, hash de passwords y secrets externos.
 8. El pipeline ejecuta build, pruebas, SonarCloud, SAST/ML, Telegram y deploy por CLI.
 9. La documentacion permite reproducir la demo completa.
-

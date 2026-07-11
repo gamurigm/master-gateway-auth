@@ -110,20 +110,37 @@ El workflow `.github/workflows/ci.yml` ejecuta:
 - Tests e2e backend.
 - Build y tests de `ventas`.
 - Type check y build frontend.
-- Analisis SonarQube solo en `main`.
+- SonarQube Community en contenedores Docker solo en `main`.
+- Espera y aplica el Quality Gate antes del despliegue.
+- Notifica por Telegram el resultado `OK`, `ERROR` o `UNKNOWN` del gate.
 
-Variables necesarias en GitHub:
+El runner levanta temporalmente `sonar-db` y `sonarqube:community`, genera un
+token de analisis y destruye los contenedores al finalizar. Por eso este job no
+requiere `SONAR_TOKEN` ni `SONAR_HOST_URL` en GitHub Secrets.
+
+Secrets necesarios para la notificacion:
 
 | Tipo | Nombre | Valor |
 | --- | --- | --- |
-| Secret | `SONAR_TOKEN` | Token generado en SonarQube |
-| Variable | `SONAR_HOST_URL` | URL publica del servidor SonarQube |
+| Secret | `TELEGRAM_BOT_TOKEN` | Token del bot |
+| Secret | `TELEGRAM_CHAT_ID` | ID del chat destino |
 
-Nota importante: si SonarQube vive solo en Docker/WSL local, GitHub-hosted runners no pueden acceder a `localhost`. Para usar ese SonarQube local desde GitHub Actions necesitas un runner self-hosted en tu maquina/WSL o publicar temporalmente el servidor mediante una URL accesible.
+La instancia del runner es efimera: sirve para bloquear el despliegue por el
+Quality Gate actual, pero no conserva historial entre ejecuciones. Para mantener
+metricas historicas se necesita un SonarQube persistente en un servidor propio.
 
 ## Limitacion de Community Build
 
-SonarQube Community Build no soporta analisis multi-rama. Por eso el job `sonar` se ejecuta solo en `push` a `main`; PR, `dev` y `test` mantienen build y pruebas sin enviar analisis multi-rama.
+SonarQube Community Build no soporta analisis multi-rama. Por eso el job
+`sonarqube` se ejecuta solo en `push` a `main`; PR, `dev` y `test` mantienen
+build y pruebas sin enviar analisis multi-rama.
+
+## SonarQube Cloud
+
+El pipeline no usa SonarQube Cloud. Un check externo con ese nombre proviene de
+la aplicacion instalada en GitHub y no de este repositorio. Debe desactivarse en
+`SonarQube Cloud > Project Settings > Analysis Method` o retirarse el acceso de
+esa aplicacion al repositorio si se quiere que deje de aparecer en los PR.
 
 ## Referencias
 

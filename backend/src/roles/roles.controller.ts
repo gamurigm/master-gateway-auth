@@ -85,4 +85,22 @@ export class RolesController {
   ) {
     return this.rolesService.assignMenu(id, dto.menuId, user.sub);
   }
+
+  @Delete(':id/modules/:moduleId')
+  unassignModule(
+    @Param('id') id: string,
+    @Param('moduleId') moduleId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.rolesService.unassignModule(id, moduleId, user.sub);
+  }
+
+  @Delete(':id/menus/:menuId')
+  unassignMenu(
+    @Param('id') id: string,
+    @Param('menuId') menuId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.rolesService.unassignMenu(id, menuId, user.sub);
+  }
 }
