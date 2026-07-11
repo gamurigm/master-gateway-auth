@@ -315,7 +315,7 @@ jobs:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.sonarqube.result == 'success'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/agent/sincroniza-dev-test') && needs.sonarqube.result == 'success'
     needs:
       - build-test
       - codebert-sast
