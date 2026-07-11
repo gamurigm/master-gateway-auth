@@ -55,7 +55,7 @@ import { ModuleFormComponent } from '../module-form/module-form.component';
     <app-module-form
       *ngIf="showForm"
       [module]="selectedModule"
-      (close)="closeForm()"
+      (closed)="closeForm()"
       (saved)="onSaved()"
     />
   `,

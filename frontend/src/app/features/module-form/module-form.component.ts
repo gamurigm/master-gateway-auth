@@ -57,10 +57,14 @@ export class ModuleFormComponent implements OnInit {
   private readonly modulesService = inject(ModulesService);
 
   @Input() module: SystemModule | null = null;
-  @Output() close = new EventEmitter<void>();
+  @Output() closed = new EventEmitter<void>();
   @Output() saved = new EventEmitter<void>();
 
   isEdit = false;
+
+  close() {
+    this.closed.emit();
+  }
   saving = false;
   error = '';
   dto: CreateModuleDto & Partial<UpdateModuleDto> = { code: '', name: '', description: '' };
