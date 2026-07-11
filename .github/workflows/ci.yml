@@ -2,18 +2,21 @@ name: CI/CD
 
 on:
   pull_request:
-  push:
     branches:
-      - main
       - dev
       - test
+      - main
+  push:
+    branches:
+      - dev
+      - test
+      - main
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/master_gateway?schema=public
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,7 +63,6 @@ jobs:
     env:
       CODEBERT_MODEL: mahdin70/CodeBERT-PrimeVul-BigVul
       CODEBERT_THRESHOLD: "0.999"
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -123,7 +125,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/master_gateway?schema=public
       SONAR_HOST_URL: http://localhost:9000
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -174,72 +175,47 @@ jobs:
         if: always()
         run: docker compose down sonar-db sonarqube
 
+  telegram-notify-dev-test:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/test')
+    needs:
+      - build-test
+      - codebert-sast
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            Master Gateway - push a ${{ github.ref_name }}
+
+            Build/Test: ${{ needs.build-test.result }}
+            CodeBERT SAST: ${{ needs.codebert-sast.result }}
+            Commit: ${{ github.sha }}
+            Autor: ${{ github.actor }}
+
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
   telegram-notify-main:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && always()
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - build-test
       - codebert-sast
       - sonarqube
     runs-on: ubuntu-latest
     steps:
-      - name: Check job status
-        id: status
-        run: |
-          if [ "${{ needs.build-test.result }}" = "success" ] && \
-             [ "${{ needs.codebert-sast.result }}" = "success" ] && \
-             [ "${{ needs.sonarqube.result }}" = "success" ]; then
-            echo "status=✅ Pipeline exitoso" >> $GITHUB_OUTPUT
-            echo "emoji=🟢" >> $GITHUB_OUTPUT
-          else
-            echo "status=❌ Pipeline fallido" >> $GITHUB_OUTPUT
-            echo "emoji=🔴" >> $GITHUB_OUTPUT
-          fi
-
       - name: Notify Telegram
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            ${{ steps.status.outputs.emoji }} Master Gateway — ${{ steps.status.outputs.status }}
-
-            Rama: ${{ github.ref_name }}
-            Commit: ${{ github.sha }}
-            Autor: ${{ github.actor }}
+            Master Gateway - main
 
             Build/Test: ${{ needs.build-test.result }}
             CodeBERT SAST: ${{ needs.codebert-sast.result }}
             SonarQube: ${{ needs.sonarqube.result }}
-
-            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-  telegram-notify-merge:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/test') && always()
-    needs:
-      - build-test
-      - codebert-sast
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check job status
-        id: status
-        run: |
-          if [ "${{ needs.build-test.result }}" = "success" ]; then
-            echo "status=✅ Merge exitoso a ${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            echo "emoji=✅" >> $GITHUB_OUTPUT
-          else
-            echo "status=❌ Merge fallido a ${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            echo "emoji=❌" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Notify Telegram
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          message: |
-            ${{ steps.status.outputs.emoji }} Master Gateway — ${{ steps.status.outputs.status }}
-
-            Rama: ${{ github.ref_name }}
             Commit: ${{ github.sha }}
             Autor: ${{ github.actor }}
 
@@ -258,7 +234,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy to Render
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
 
       - name: Notify deploy result
         if: success()
@@ -267,7 +243,7 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            🚀 Master Gateway desplegado en Render exitosamente
+            Master Gateway desplegado en Render
 
             Commit: ${{ github.sha }}
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
