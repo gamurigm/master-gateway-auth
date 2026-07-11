@@ -1,5 +1,5 @@
 import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { NextFunction, Response } from 'express';
 import { RequestWithUser } from '../auth/request-with-user';
 

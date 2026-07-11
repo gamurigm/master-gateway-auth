@@ -5,7 +5,7 @@
  * Registra automáticamente un servicio en Kong cuando el contenedor se levanta
  */
 
-const http = require('http');
+const http = require('node:http');
 
 // Configuración desde variables de entorno
 const config = {
@@ -14,8 +14,8 @@ const config = {
   serviceUrl: process.env.KONG_SERVICE_URL,
   routePaths: (process.env.KONG_ROUTE_PATHS || '').split(',').map(p => p.trim()).filter(Boolean),
   serviceHost: process.env.KONG_SERVICE_HOST || process.env.KONG_SERVICE_NAME,
-  servicePort: parseInt(process.env.KONG_SERVICE_PORT) || 3000,
-  waitTime: parseInt(process.env.KONG_WAIT_TIME || 30) // segundos
+  servicePort: Number.parseInt(process.env.KONG_SERVICE_PORT) || 3000,
+  waitTime: Number.parseInt(process.env.KONG_WAIT_TIME || 30) // segundos
 };
 
 // Validar configuración
@@ -61,7 +61,7 @@ function request(method, path, data = null) {
         try {
           const jsonBody = body ? JSON.parse(body) : {};
           resolve({ statusCode: res.statusCode, data: jsonBody });
-        } catch (e) {
+        } catch (_e) {
           resolve({ statusCode: res.statusCode, data: body });
         }
       });
@@ -85,14 +85,14 @@ async function registerService() {
     
     if (getRes.statusCode === 200) {
       console.log(`✅ Servicio "${config.serviceName}" ya existe. Actualizando...`);
-      const patchRes = await request('PATCH', `/services/${config.serviceName}`, {
+      await request('PATCH', `/services/${config.serviceName}`, {
         name: config.serviceName,
         url: config.serviceUrl
       });
       console.log(`✅ Servicio "${config.serviceName}" actualizado correctamente`);
     } else {
       console.log(`📝 Creando servicio "${config.serviceName}"...`);
-      const postRes = await request('POST', '/services/', {
+      await request('POST', '/services/', {
         name: config.serviceName,
         url: config.serviceUrl
       });
@@ -120,8 +120,8 @@ async function registerRoutes() {
     for (const path of config.routePaths) {
       if (!existingPaths.has(path)) {
         console.log(`📝 Creando ruta para "${path}"...`);
-        const postRes = await request('POST', routesUrl, {
-          name: `${config.serviceName}-route-${path.replace(/\//g, '-')}`,
+        await request('POST', routesUrl, {
+          name: `${config.serviceName}-route-${path.replaceAll('/', '-')}`,
           paths: [path],
           strip_path: false
         });
@@ -157,7 +157,10 @@ async function main() {
     console.log('');
     console.log('✅ Servicio registrado en Kong:');
     console.log(`   - Nombre: ${config.serviceName}`);
-    console.log(`   - Rutas: ${config.routePaths.map(p => `http://localhost:8000${p}/*`).join('\n             ')}`);
+    const routeLines = config.routePaths
+      .map(p => `   - http://localhost:8000${p}/*`)
+      .join('\n');
+    console.log(`   - Rutas:\n${routeLines}`);
   } catch (error) {
     console.error('❌ Error en Auto-Registration:', error);
     process.exit(1);
