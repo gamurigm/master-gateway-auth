@@ -25,7 +25,15 @@ import { UsersModule } from './users/users.module';
       },
     ]),
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', '..', 'frontend', 'dist', 'frontend', 'browser'),
+      rootPath: join(
+        __dirname,
+        '..',
+        '..',
+        'frontend',
+        'dist',
+        'frontend',
+        'browser',
+      ),
       exclude: ['/api/(.*)'],
     }),
     PrismaModule,

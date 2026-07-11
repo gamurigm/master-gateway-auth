@@ -107,8 +107,7 @@ jobs:
             -e CODEBERT_THRESHOLD="$CODEBERT_THRESHOLD" \
             master-gateway-codebert-sast \
             --changed-files reports/codebert-changed-files.txt \
-            --report reports/codebert-sast.json \
-            --warn-only
+            --report reports/codebert-sast.json
 
       - name: Upload CodeBERT report
         if: always()
@@ -118,6 +117,25 @@ jobs:
           path: |
             reports/codebert-sast.json
             reports/codebert-changed-files.txt
+
+      - name: Alert Telegram on SAST vulnerability
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ⚠️ ALERTA SAST/ML - Master Gateway
+
+            CodeBERT detectó patrones de código vulnerable.
+            El pipeline ha sido BLOQUEADO.
+
+            Rama: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Autor: ${{ github.actor }}
+
+            Revisa el reporte en:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   sonarqube:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
