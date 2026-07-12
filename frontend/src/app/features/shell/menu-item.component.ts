@@ -1,12 +1,12 @@
-import { CommonModule } from '@angular/common';
-import { Component, Input } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { MenuNode } from '../../core/api.models';
+﻿import { CommonModule } from "@angular/common";
+import { Component, Input } from "@angular/core";
+import { RouterLink, RouterLinkActive } from "@angular/router";
+import { MenuNode } from "../../core/api.models";
 
 @Component({
-  selector: 'app-menu-item',
+  selector: "app-menu-item",
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, RouterLinkActive],
   template: `
     <a *ngIf="node.url && isInternal(node.url)" [routerLink]="node.url" class="menu-link">{{ node.name }}</a>
     <a *ngIf="node.url && !isInternal(node.url)" [href]="node.url" class="menu-link" target="_self" rel="noreferrer">
@@ -19,34 +19,41 @@ import { MenuNode } from '../../core/api.models';
   `,
   styles: [
     `
-      .menu-link {
-        display: block;
-        color: var(--text-main);
-        text-decoration: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        transition: all 0.2s ease;
-        font-weight: 500;
-        font-size: 14px;
-      }
-      .menu-link:hover {
-        background: var(--primary-color);
-        color: #ffffff;
-        transform: translateX(4px);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
-      }
+      .menu-link,
       .group-label {
-        display: block;
-        font-weight: 700;
-        padding: 10px 14px;
-        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        min-height: 40px;
+        border-radius: 12px;
+        padding: 0 14px;
         font-size: 14px;
       }
+
+      .menu-link {
+        color: #334155;
+        text-decoration: none;
+        font-weight: 750;
+        transition: all 0.18s ease;
+      }
+
+      .menu-link:hover,
+      .menu-link.active {
+        color: #0f172a;
+        background: #eef6ff;
+        box-shadow: inset 3px 0 0 #2563eb;
+      }
+
+      .group-label {
+        color: #64748b;
+        font-weight: 850;
+      }
+
       .child-menu {
-        margin-left: 14px;
-        border-left: 2px solid rgba(0,0,0,0.06);
+        display: grid;
+        gap: 4px;
+        margin: 4px 0 4px 12px;
         padding-left: 10px;
-        margin-top: 4px;
+        border-left: 1px solid rgba(148, 163, 184, 0.28);
       }
     `,
   ],

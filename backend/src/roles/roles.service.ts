@@ -17,6 +17,39 @@ export class RolesService {
     return this.prisma.role.findMany({
       where: { estado: Estado.ACTIVO },
       orderBy: { name: 'asc' },
+      include: {
+        users: {
+          where: {
+            estado: Estado.ACTIVO,
+            user: { estado: Estado.ACTIVO },
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                estado: true,
+              },
+            },
+          },
+        },
+        modules: {
+          where: {
+            estado: Estado.ACTIVO,
+            module: { estado: Estado.ACTIVO },
+          },
+          include: { module: true },
+        },
+        menus: {
+          where: {
+            estado: Estado.ACTIVO,
+            menu: { estado: Estado.ACTIVO },
+          },
+          include: { menu: { include: { module: true } } },
+        },
+      },
     });
   }
 

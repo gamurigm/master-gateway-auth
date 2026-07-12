@@ -71,6 +71,24 @@ export interface PaginatedResponse<T> {
   limit: number;
 }
 
+export interface RoleUserAssignment {
+  id: string;
+  estado: string;
+  user: Pick<User, "id" | "email" | "firstName" | "lastName" | "estado">;
+}
+
+export interface RoleModuleAssignment {
+  id: string;
+  estado: string;
+  module: SystemModule;
+}
+
+export interface RoleMenuAssignment {
+  id: string;
+  estado: string;
+  menu: Menu;
+}
+
 export interface Role {
   id: string;
   name: string;
@@ -78,6 +96,9 @@ export interface Role {
   estado: string;
   createdAt: string;
   updatedAt: string;
+  users?: RoleUserAssignment[];
+  modules?: RoleModuleAssignment[];
+  menus?: RoleMenuAssignment[];
 }
 
 export interface RoleUser {

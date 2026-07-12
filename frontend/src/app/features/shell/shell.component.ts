@@ -1,6 +1,12 @@
 import { CommonModule } from "@angular/common";
 import { Component, OnInit, inject } from "@angular/core";
-import { Route, Router, RouterLink, RouterOutlet } from "@angular/router";
+import {
+  Route,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from "@angular/router";
 import { MenuModule, MenuNode } from "../../core/api.models";
 import { AuthService } from "../../core/auth.service";
 import { MenuService } from "../../core/menu.service";
@@ -16,32 +22,43 @@ import { MenuItemComponent } from "./menu-item.component";
 @Component({
   selector: "app-shell",
   standalone: true,
-  imports: [CommonModule, RouterLink, RouterOutlet, MenuItemComponent],
+  imports: [
+    CommonModule,
+    RouterLink,
+    RouterLinkActive,
+    RouterOutlet,
+    MenuItemComponent,
+  ],
   template: `
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <strong>Master Gateway</strong>
-          <span>{{ roleName }}</span>
+          <span class="brand-mark">MG</span>
+          <div>
+            <strong>Master Gateway</strong>
+            <span>{{ roleName }}</span>
+          </div>
         </div>
 
-        <nav>
+        <nav class="side-nav" aria-label="Navegacion principal">
           <section class="menu-module">
-            <h2>Accesos</h2>
-            <a class="menu-link" routerLink="/app">Dashboard</a>
-            <a class="menu-link" routerLink="/app/users">Usuarios</a>
-            <a class="menu-link" routerLink="/app/roles">Roles</a>
-            <a class="menu-link" routerLink="/app/modules">Modulos</a>
-            <a class="menu-link" routerLink="/app/menus">Menus</a>
+            <h2>Administracion</h2>
+            <a class="menu-link" routerLink="/app" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
+            <a class="menu-link" routerLink="/app/users" routerLinkActive="active">Usuarios</a>
+            <a class="menu-link" routerLink="/app/roles" routerLinkActive="active">Roles</a>
+            <a class="menu-link" routerLink="/app/modules" routerLinkActive="active">Modulos</a>
+            <a class="menu-link" routerLink="/app/menus" routerLinkActive="active">Menus</a>
           </section>
 
-          <section *ngFor="let module of modules" class="menu-module">
-            <h2>{{ module.name }}</h2>
-            <app-menu-item *ngFor="let item of module.menus" [node]="item" />
+          <section *ngIf="modules.length" class="menu-module dynamic-menu">
+            <h2>Asignado al rol</h2>
+            <ng-container *ngFor="let module of modules">
+              <app-menu-item *ngFor="let item of module.menus" [node]="item" />
+            </ng-container>
           </section>
         </nav>
 
-        <button type="button" class="secondary-button" (click)="logout()">
+        <button type="button" class="secondary-button logout-button" (click)="logout()">
           Cerrar sesion
         </button>
       </aside>
@@ -56,101 +73,124 @@ import { MenuItemComponent } from "./menu-item.component";
       .shell {
         min-height: 100vh;
         display: grid;
-        grid-template-columns: 280px 1fr;
-        background: var(--bg-gradient);
+        grid-template-columns: 300px minmax(0, 1fr);
+        background:
+          radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 32rem),
+          linear-gradient(135deg, #f6f8fb 0%, #eef3f8 100%);
       }
 
       .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
         display: flex;
         flex-direction: column;
         gap: 24px;
-        background: var(--glass-bg);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-right: 1px solid var(--glass-border);
-        padding: 32px 24px;
-        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02);
+        background: rgba(255, 255, 255, 0.92);
+        border-right: 1px solid rgba(148, 163, 184, 0.22);
+        padding: 24px;
+        box-shadow: 12px 0 36px rgba(15, 23, 42, 0.06);
         z-index: 10;
       }
 
       .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
         display: grid;
-        gap: 6px;
-        padding-bottom: 24px;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        place-items: center;
+        color: #ffffff;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+        background: linear-gradient(135deg, #2563eb, #0f766e);
+        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
       }
 
       .brand strong {
-        font-size: 22px;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        background: linear-gradient(90deg, #0f172a, #3b82f6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        display: block;
+        color: #0f172a;
+        font-size: 17px;
+        font-weight: 850;
+        letter-spacing: -0.03em;
       }
 
-      .brand span {
-        color: var(--text-muted);
-        font-size: 13px;
-        font-weight: 500;
+      .brand span:not(.brand-mark) {
+        display: block;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.08em;
       }
 
-      nav {
+      .side-nav {
         display: grid;
-        gap: 24px;
+        gap: 20px;
         flex: 1;
         overflow-y: auto;
-      }
-
-      nav::-webkit-scrollbar {
-        width: 4px;
-      }
-      nav::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 4px;
+        padding-right: 4px;
       }
 
       .menu-module h2 {
-        margin: 0 0 12px;
-        font-size: 11px;
+        margin: 0 0 10px;
         color: #94a3b8;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        font-weight: 700;
       }
 
       .menu-link {
-        display: block;
-        color: var(--text-main);
+        display: flex;
+        align-items: center;
+        min-height: 42px;
+        color: #334155;
         text-decoration: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        font-weight: 500;
+        border-radius: 12px;
+        padding: 0 14px;
+        font-weight: 750;
         font-size: 14px;
+        transition: all 0.18s ease;
       }
 
-      .menu-link:hover {
-        background: var(--primary-color);
-        color: #ffffff;
-        transform: translateX(4px);
+      .menu-link:hover,
+      .menu-link.active {
+        color: #0f172a;
+        background: #eef6ff;
+        box-shadow: inset 3px 0 0 #2563eb;
+      }
+
+      .dynamic-menu {
+        border-top: 1px solid rgba(148, 163, 184, 0.18);
+        padding-top: 18px;
+      }
+
+      .logout-button {
+        width: 100%;
       }
 
       .workspace {
-        padding: 40px;
-        overflow-y: auto;
+        min-width: 0;
+        padding: 32px 40px;
       }
 
-      @media (max-width: 800px) {
+      @media (max-width: 900px) {
         .shell {
           grid-template-columns: 1fr;
         }
 
         .sidebar {
-          border-right: 0;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-          padding: 20px;
+          position: static;
+          height: auto;
         }
 
         .workspace {
@@ -171,8 +211,8 @@ export class ShellComponent implements OnInit {
   ngOnInit() {
     this.menuService.tree().subscribe({
       next: (modules) => {
-        this.modules = modules;
-        this.registerDynamicRoutes(modules);
+        this.modules = Array.isArray(modules) ? modules : [];
+        this.registerDynamicRoutes(this.modules);
       },
       error: () => {
         this.modules = [];
@@ -221,7 +261,7 @@ export class ShellComponent implements OnInit {
         const component = this.routeMap[path] ?? DynamicPageComponent;
         routes.push({ path, component, data: { title: node.name } });
       }
-      node.children.forEach(visit);
+      (node.children ?? []).forEach(visit);
     };
 
     modules.flatMap((module) => module.menus).forEach(visit);
