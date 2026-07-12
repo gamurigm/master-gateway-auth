@@ -17,7 +17,6 @@ import { UserListComponent } from "../user-list/user-list.component";
 import { RoleListComponent } from "../role-list/role-list.component";
 import { ModuleListComponent } from "../module-list/module-list.component";
 import { MenuListComponent } from "../menu-list/menu-list.component";
-import { MenuItemComponent } from "./menu-item.component";
 
 @Component({
   selector: "app-shell",
@@ -27,7 +26,6 @@ import { MenuItemComponent } from "./menu-item.component";
     RouterLink,
     RouterLinkActive,
     RouterOutlet,
-    MenuItemComponent,
   ],
   template: `
     <div class="shell">
@@ -48,13 +46,6 @@ import { MenuItemComponent } from "./menu-item.component";
             <a class="menu-link" routerLink="/app/roles" routerLinkActive="active">Roles</a>
             <a class="menu-link" routerLink="/app/modules" routerLinkActive="active">Modulos</a>
             <a class="menu-link" routerLink="/app/menus" routerLinkActive="active">Menus</a>
-          </section>
-
-          <section *ngIf="modules.length" class="menu-module dynamic-menu">
-            <h2>Asignado al rol</h2>
-            <ng-container *ngFor="let module of modules">
-              <app-menu-item *ngFor="let item of module.menus" [node]="item" />
-            </ng-container>
           </section>
         </nav>
 
@@ -169,11 +160,6 @@ import { MenuItemComponent } from "./menu-item.component";
         box-shadow: inset 3px 0 0 #2563eb;
       }
 
-      .dynamic-menu {
-        border-top: 1px solid rgba(148, 163, 184, 0.18);
-        padding-top: 18px;
-      }
-
       .logout-button {
         width: 100%;
       }
@@ -221,13 +207,10 @@ export class ShellComponent implements OnInit {
   }
 
   logout() {
-    this.authService.logout().subscribe({
-      next: () => void this.router.navigateByUrl("/login"),
-      error: () => {
-        this.authService.clearSession();
-        void this.router.navigateByUrl("/login");
-      },
-    });
+    const logoutRequest = this.authService.logout();
+    this.authService.clearSession();
+    void this.router.navigateByUrl("/login");
+    logoutRequest.subscribe({ error: () => undefined });
   }
 
   private registerDynamicRoutes(modules: MenuModule[]) {
