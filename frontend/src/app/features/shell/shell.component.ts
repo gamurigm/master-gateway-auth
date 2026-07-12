@@ -1,22 +1,22 @@
-import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
-import { Route, Router, RouterOutlet } from '@angular/router';
-import { MenuModule, MenuNode } from '../../core/api.models';
-import { AuthService } from '../../core/auth.service';
-import { MenuService } from '../../core/menu.service';
-import { baseAppChildren } from '../../app-route-children';
-import { DashboardComponent } from '../dashboard/dashboard.component';
-import { DynamicPageComponent } from '../dynamic-page/dynamic-page.component';
-import { UserListComponent } from '../user-list/user-list.component';
-import { RoleListComponent } from '../role-list/role-list.component';
-import { ModuleListComponent } from '../module-list/module-list.component';
-import { MenuListComponent } from '../menu-list/menu-list.component';
-import { MenuItemComponent } from './menu-item.component';
+import { CommonModule } from "@angular/common";
+import { Component, OnInit, inject } from "@angular/core";
+import { Route, Router, RouterLink, RouterOutlet } from "@angular/router";
+import { MenuModule, MenuNode } from "../../core/api.models";
+import { AuthService } from "../../core/auth.service";
+import { MenuService } from "../../core/menu.service";
+import { baseAppChildren } from "../../app-route-children";
+import { DashboardComponent } from "../dashboard/dashboard.component";
+import { DynamicPageComponent } from "../dynamic-page/dynamic-page.component";
+import { UserListComponent } from "../user-list/user-list.component";
+import { RoleListComponent } from "../role-list/role-list.component";
+import { ModuleListComponent } from "../module-list/module-list.component";
+import { MenuListComponent } from "../menu-list/menu-list.component";
+import { MenuItemComponent } from "./menu-item.component";
 
 @Component({
-  selector: 'app-shell',
+  selector: "app-shell",
   standalone: true,
-  imports: [CommonModule, RouterOutlet, MenuItemComponent],
+  imports: [CommonModule, RouterLink, RouterOutlet, MenuItemComponent],
   template: `
     <div class="shell">
       <aside class="sidebar">
@@ -26,13 +26,24 @@ import { MenuItemComponent } from './menu-item.component';
         </div>
 
         <nav>
+          <section class="menu-module">
+            <h2>Accesos</h2>
+            <a class="menu-link" routerLink="/app">Dashboard</a>
+            <a class="menu-link" routerLink="/app/users">Usuarios</a>
+            <a class="menu-link" routerLink="/app/roles">Roles</a>
+            <a class="menu-link" routerLink="/app/modules">Modulos</a>
+            <a class="menu-link" routerLink="/app/menus">Menus</a>
+          </section>
+
           <section *ngFor="let module of modules" class="menu-module">
             <h2>{{ module.name }}</h2>
             <app-menu-item *ngFor="let item of module.menus" [node]="item" />
           </section>
         </nav>
 
-        <button type="button" class="secondary-button" (click)="logout()">Cerrar sesion</button>
+        <button type="button" class="secondary-button" (click)="logout()">
+          Cerrar sesion
+        </button>
       </aside>
 
       <main class="workspace">
@@ -66,7 +77,7 @@ import { MenuItemComponent } from './menu-item.component';
         display: grid;
         gap: 6px;
         padding-bottom: 24px;
-        border-bottom: 1px solid rgba(0,0,0,0.06);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
       }
 
       .brand strong {
@@ -92,7 +103,7 @@ import { MenuItemComponent } from './menu-item.component';
         flex: 1;
         overflow-y: auto;
       }
-      
+
       nav::-webkit-scrollbar {
         width: 4px;
       }
@@ -110,6 +121,22 @@ import { MenuItemComponent } from './menu-item.component';
         font-weight: 700;
       }
 
+      .menu-link {
+        display: block;
+        color: var(--text-main);
+        text-decoration: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      .menu-link:hover {
+        background: var(--primary-color);
+        color: #ffffff;
+        transform: translateX(4px);
+      }
+
       .workspace {
         padding: 40px;
         overflow-y: auto;
@@ -122,10 +149,10 @@ import { MenuItemComponent } from './menu-item.component';
 
         .sidebar {
           border-right: 0;
-          border-bottom: 1px solid rgba(0,0,0,0.06);
+          border-bottom: 1px solid rgba(0, 0, 0, 0.06);
           padding: 20px;
         }
-        
+
         .workspace {
           padding: 20px;
         }
@@ -139,7 +166,7 @@ export class ShellComponent implements OnInit {
   private readonly router = inject(Router);
 
   modules: MenuModule[] = [];
-  roleName = this.authService.getCurrentRole()?.name ?? 'Sin rol';
+  roleName = this.authService.getCurrentRole()?.name ?? "Sin rol";
 
   ngOnInit() {
     this.menuService.tree().subscribe({
@@ -155,10 +182,10 @@ export class ShellComponent implements OnInit {
 
   logout() {
     this.authService.logout().subscribe({
-      next: () => void this.router.navigateByUrl('/login'),
+      next: () => void this.router.navigateByUrl("/login"),
       error: () => {
         this.authService.clearSession();
-        void this.router.navigateByUrl('/login');
+        void this.router.navigateByUrl("/login");
       },
     });
   }
@@ -167,7 +194,7 @@ export class ShellComponent implements OnInit {
     const dynamicChildren = this.flattenMenuRoutes(modules);
     const children = this.mergeChildren(baseAppChildren, dynamicChildren);
     const nextConfig = this.router.config.map((route) =>
-      route.path === 'app'
+      route.path === "app"
         ? {
             ...route,
             children,
@@ -179,18 +206,18 @@ export class ShellComponent implements OnInit {
   }
 
   private readonly routeMap: Record<string, any> = {
-    'users': UserListComponent,
-    'roles': RoleListComponent,
-    'modules': ModuleListComponent,
-    'menus': MenuListComponent,
+    users: UserListComponent,
+    roles: RoleListComponent,
+    modules: ModuleListComponent,
+    menus: MenuListComponent,
   };
 
   private flattenMenuRoutes(modules: MenuModule[]): Route[] {
     const routes: Route[] = [];
 
     const visit = (node: MenuNode) => {
-      if (node.url?.startsWith('/app/')) {
-        const path = node.url.replace('/app/', '');
+      if (node.url?.startsWith("/app/")) {
+        const path = node.url.replace("/app/", "");
         const component = this.routeMap[path] ?? DynamicPageComponent;
         routes.push({ path, component, data: { title: node.name } });
       }
@@ -204,17 +231,16 @@ export class ShellComponent implements OnInit {
   private mergeChildren(baseChildren: Route[], dynamicChildren: Route[]) {
     const merged = new Map<string, Route>();
     for (const route of baseChildren) {
-      merged.set(route.path ?? '', route);
+      merged.set(route.path ?? "", route);
     }
     for (const route of dynamicChildren) {
-      merged.set(route.path ?? '', route);
+      merged.set(route.path ?? "", route);
     }
 
-    if (!merged.has('')) {
-      merged.set('', { path: '', component: DashboardComponent });
+    if (!merged.has("")) {
+      merged.set("", { path: "", component: DashboardComponent });
     }
 
     return [...merged.values()];
   }
 }
-
