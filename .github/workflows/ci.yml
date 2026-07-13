@@ -497,10 +497,12 @@ jobs:
     # ESTRATEGIA 4: Solo en main. ESTRATEGIA 2: deploy requiere
     # sonarqube exitoso O que el gate haya sido OK (ya aprobado)
     if: |
+      always() &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       needs.build-test.result == 'success' &&
-      (needs.sonarqube.result == 'success' || needs.sonarqube.outputs.gate_status == 'OK')
+      (needs.sonarqube.result == 'success' || needs.sonarqube.outputs.gate_status == 'OK') &&
+      (needs.codebert-sast.result == 'success' || needs.codebert-sast.result == 'skipped')
     needs:
       - build-test
       - detect-changes
