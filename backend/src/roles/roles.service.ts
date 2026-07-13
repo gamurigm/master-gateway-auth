@@ -59,15 +59,38 @@ export class RolesService {
       include: {
         users: {
           where: { estado: Estado.ACTIVO, user: { estado: Estado.ACTIVO } },
-          include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
         },
         modules: {
           where: { estado: Estado.ACTIVO, module: { estado: Estado.ACTIVO } },
-          include: { module: { select: { id: true, code: true, name: true, description: true } } },
+          include: {
+            module: {
+              select: { id: true, code: true, name: true, description: true },
+            },
+          },
         },
         menus: {
           where: { estado: Estado.ACTIVO, menu: { estado: Estado.ACTIVO } },
-          include: { menu: { select: { id: true, name: true, url: true, icon: true, order: true } } },
+          include: {
+            menu: {
+              select: {
+                id: true,
+                name: true,
+                url: true,
+                icon: true,
+                order: true,
+              },
+            },
+          },
         },
       },
     });

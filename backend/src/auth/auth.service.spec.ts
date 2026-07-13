@@ -1,4 +1,4 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+﻿import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Estado } from '@prisma/client';
@@ -24,14 +24,16 @@ const { privateKey, publicKey } = generateKeyPairSync('rsa', {
 const jwtOptions = {
   privateKey,
   publicKey,
-  signOptions: { algorithm: 'RS256' as const, issuer: 'master-gateway', audience: 'master-gateway-clients' },
-  verifyOptions: { algorithms: ['RS256'] as Algorithm[], issuer: 'master-gateway', audience: 'master-gateway-clients' },
-};
-
-type AccessTokenPayload = {
-  sub: string;
-  roleId: string;
-  roleName: string;
+  signOptions: {
+    algorithm: 'RS256' as const,
+    issuer: 'master-gateway',
+    audience: 'master-gateway-clients',
+  },
+  verifyOptions: {
+    algorithms: ['RS256'] as Algorithm[],
+    issuer: 'master-gateway',
+    audience: 'master-gateway-clients',
+  },
 };
 
 type RefreshTokenCreateArgs = {
@@ -110,7 +112,7 @@ describe('AuthService', () => {
     });
 
     const result = await service.login({ email: EMAIL, password: PASSWORD });
-    const tempPayload = jwtService.decode(result.tempToken) as Record<string, unknown>;
+    const tempPayload = jwtService.decode(result.tempToken);
 
     expect(tempPayload).toMatchObject({ sub: USER_ID, email: EMAIL });
     expect(result.roles).toEqual([

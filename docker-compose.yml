@@ -117,7 +117,7 @@ services:
       JWT_ISSUER: master-gateway
       JWT_AUDIENCE: master-gateway-clients
       JWT_SECRET: 7xKpLmNqRsTvWzY2A4C6E8G0JbDfHjMw
-      JWE_SECRET: ZnDwNgatMrdmOf3GeviysWbVJLTI2qFckKBjQ5SPYuHCz6AXE4hxoUl9018Rp7
+      JWE_SECRET: ZnDwNgatMrdmOf3GeviysWbVJLTI2qFc
       JWT_EXPIRES_IN: 15m
       TEMP_JWT_SECRET: RvYz3B5D7F9H1J3L5N7P9R0T2V4W6X8Z
       TEMP_JWT_EXPIRES_IN: 5m

@@ -58,7 +58,10 @@ export class MenusController {
   @Delete(':id')
   @RequireRoles('ADMIN')
   @UseGuards(RolesGuard)
-  remove(@Param('id', UUIDv4) id: string, @CurrentUser() user: AuthenticatedUser) {
+  remove(
+    @Param('id', UUIDv4) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.menusService.remove(id, user.sub);
   }
 }

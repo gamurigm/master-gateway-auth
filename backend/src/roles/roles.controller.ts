@@ -54,7 +54,10 @@ export class RolesController {
   }
 
   @Delete(':id')
-  remove(@Param('id', UUIDv4) id: string, @CurrentUser() user: AuthenticatedUser) {
+  remove(
+    @Param('id', UUIDv4) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.rolesService.remove(id, user.sub);
   }
 

@@ -10,7 +10,17 @@ const TEST_PASSWORD = 'Str0ng!Pass';
 
 describe('UsersService', () => {
   let service: UsersService;
-  let prisma: { $transaction: jest.Mock; user: { findMany: jest.Mock; findUnique: jest.Mock; findFirst: jest.Mock; create: jest.Mock; update: jest.Mock; count: jest.Mock } };
+  let prisma: {
+    $transaction: jest.Mock;
+    user: {
+      findMany: jest.Mock;
+      findUnique: jest.Mock;
+      findFirst: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+      count: jest.Mock;
+    };
+  };
 
   const mockUser = () => ({
     id: USER_ID,
@@ -69,7 +79,9 @@ describe('UsersService', () => {
     it('throws NotFoundException when user is inactive or missing', async () => {
       prisma.user.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne(USER_ID)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOne(USER_ID)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -79,7 +91,12 @@ describe('UsersService', () => {
       prisma.user.create.mockResolvedValue(mockUser());
 
       const result = await service.create(
-        { email: EMAIL, firstName: 'Test', lastName: 'User', password: 'Str0ng!Pass' },
+        {
+          email: EMAIL,
+          firstName: 'Test',
+          lastName: 'User',
+          password: 'Str0ng!Pass',
+        },
         ACTOR_ID,
       );
 
@@ -87,7 +104,11 @@ describe('UsersService', () => {
       expect(result.email).toBe(EMAIL);
       expect(prisma.user.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ email: EMAIL, firstName: 'Test', createdBy: ACTOR_ID }),
+          data: expect.objectContaining({
+            email: EMAIL,
+            firstName: 'Test',
+            createdBy: ACTOR_ID,
+          }),
         }),
       );
     });
@@ -97,7 +118,12 @@ describe('UsersService', () => {
 
       await expect(
         service.create(
-        { email: EMAIL, firstName: 'Test', lastName: 'User', password: TEST_PASSWORD },
+          {
+            email: EMAIL,
+            firstName: 'Test',
+            lastName: 'User',
+            password: TEST_PASSWORD,
+          },
           ACTOR_ID,
         ),
       ).rejects.toBeInstanceOf(ConflictException);
@@ -109,7 +135,11 @@ describe('UsersService', () => {
       prisma.user.findFirst.mockResolvedValue(mockUser());
       prisma.user.update.mockResolvedValue(mockUser());
 
-      const result = await service.update(USER_ID, { firstName: 'Updated' }, ACTOR_ID);
+      const result = await service.update(
+        USER_ID,
+        { firstName: 'Updated' },
+        ACTOR_ID,
+      );
 
       expect(result).not.toHaveProperty('passwordHash');
       expect(prisma.user.update).toHaveBeenCalledWith(
@@ -123,14 +153,19 @@ describe('UsersService', () => {
     it('throws NotFoundException when user is missing', async () => {
       prisma.user.findFirst.mockResolvedValue(null);
 
-      await expect(service.update(USER_ID, { firstName: 'Updated' }, ACTOR_ID)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.update(USER_ID, { firstName: 'Updated' }, ACTOR_ID),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
   describe('remove', () => {
     it('soft-deletes the user', async () => {
       prisma.user.findFirst.mockResolvedValue(mockUser());
-      prisma.user.update.mockResolvedValue({ ...mockUser(), estado: Estado.INACTIVO });
+      prisma.user.update.mockResolvedValue({
+        ...mockUser(),
+        estado: Estado.INACTIVO,
+      });
 
       const result = await service.remove(USER_ID, ACTOR_ID);
 
@@ -146,7 +181,9 @@ describe('UsersService', () => {
     it('throws NotFoundException when user is missing', async () => {
       prisma.user.findFirst.mockResolvedValue(null);
 
-      await expect(service.remove(USER_ID, ACTOR_ID)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.remove(USER_ID, ACTOR_ID)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 });

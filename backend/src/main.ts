@@ -5,7 +5,9 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const httpServer = app.getHttpAdapter().getInstance() as { disable?: (setting: string) => void };
+  const httpServer = app.getHttpAdapter().getInstance() as {
+    disable?: (setting: string) => void;
+  };
   httpServer.disable?.('etag');
   app.setGlobalPrefix('api', {
     exclude: [{ path: '', method: RequestMethod.GET }],

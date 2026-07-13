@@ -51,7 +51,10 @@ export class ModulesController {
   }
 
   @Delete(':id')
-  remove(@Param('id', UUIDv4) id: string, @CurrentUser() user: AuthenticatedUser) {
+  remove(
+    @Param('id', UUIDv4) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.modulesService.remove(id, user.sub);
   }
 }

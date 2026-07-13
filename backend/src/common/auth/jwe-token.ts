@@ -16,8 +16,7 @@ export async function decryptGatewayToken(
     {
       issuer: configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
       audience:
-        configService.get<string>('JWT_AUDIENCE') ??
-        'master-gateway-clients',
+        configService.get<string>('JWT_AUDIENCE') ?? 'master-gateway-clients',
       keyManagementAlgorithms: ['dir'],
       contentEncryptionAlgorithms: ['A256GCM'],
     },

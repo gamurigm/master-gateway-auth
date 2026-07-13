@@ -4,8 +4,8 @@ import {
   RequestMethod,
   ValidationPipe,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { generateKeyPairSync } from 'node:crypto';
+import { EncryptJWT } from 'jose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -18,6 +18,8 @@ type HealthBody = {
   database?: string;
   timestamp?: string;
 };
+
+process.env.JWE_SECRET = 'change-me-jwe-secret-32-bytes!!!';
 
 const { privateKey: testPrivateKey, publicKey: testPublicKey } =
   generateKeyPairSync('rsa', {
@@ -33,11 +35,7 @@ const testKeysService = {
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
-  const jwtService = new JwtService({
-    privateKey: testPrivateKey,
-    publicKey: testPublicKey,
-    algorithms: ['RS256'],
-  });
+  const jweSecret = 'change-me-jwe-secret-32-bytes!!!';
   const prisma = {
     $connect: jest.fn(),
     $disconnect: jest.fn(),
@@ -52,6 +50,7 @@ describe('AppController (e2e)', () => {
   };
 
   beforeEach(async () => {
+    process.env.JWE_SECRET = jweSecret;
     jest.clearAllMocks();
     prisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
     prisma.user.findMany.mockResolvedValue([]);
@@ -160,18 +159,16 @@ describe('AppController (e2e)', () => {
   });
 
   const signAccessToken = (roleName: string) =>
-    jwtService.signAsync(
-      {
-        sub: '11111111-1111-1111-1111-111111111111',
-        roleId: '22222222-2222-2222-2222-222222222222',
-        roleName,
-        jti: `${roleName.toLowerCase()}-jti`,
-      },
-      {
-        algorithm: 'RS256',
-        issuer: 'master-gateway',
-        audience: 'master-gateway-clients',
-        expiresIn: '15m',
-      },
-    );
+    new EncryptJWT({
+      sub: '11111111-1111-1111-1111-111111111111',
+      roleId: '22222222-2222-2222-2222-222222222222',
+      roleName,
+      jti: `${roleName.toLowerCase()}-jti`,
+    })
+      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+      .setIssuer('master-gateway')
+      .setAudience('master-gateway-clients')
+      .setIssuedAt()
+      .setExpirationTime('15m')
+      .encrypt(new TextEncoder().encode(jweSecret));
 });

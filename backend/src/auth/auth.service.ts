@@ -413,9 +413,7 @@ export class AuthService {
   }
 
   private isAllowedInternalService(serviceName: string | undefined) {
-    const allowedServices = (
-      process.env['INTERNAL_ALLOWED_SERVICES'] ?? ''
-    )
+    const allowedServices = (process.env['INTERNAL_ALLOWED_SERVICES'] ?? '')
       .split(',')
       .map((service) => service.trim())
       .filter(Boolean);
