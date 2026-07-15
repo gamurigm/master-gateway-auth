@@ -78,6 +78,20 @@ entrega.
 
 Estado: corregido; pendiente de validación en GitHub Actions.
 
+## Hallazgo 3: vulnerabilidades en dependencias de producción
+
+`npm audit --omit=dev` encontró cuatro avisos en el árbol que se despliega:
+tres de severidad alta y uno moderado. Las cadenas vulnerables procedían de
+`@nestjs/platform-express` hacia Multer y de `@nestjs/config` hacia Lodash.
+
+### Corrección
+
+- `@nestjs/platform-express`: `11.1.27` → `11.1.28`.
+- `@nestjs/config`: `4.0.2` → `4.0.4`.
+- Se regeneró `package-lock.json` sin usar actualizaciones mayores forzadas.
+- `npm audit --omit=dev`: 0 vulnerabilidades después del cambio.
+- Build del backend, 57 pruebas unitarias y 7 pruebas e2e: correctas.
+
 ## Registro de ejecuciones
 
 Esta sección se actualizará después de cada push relevante para conservar el ID,
