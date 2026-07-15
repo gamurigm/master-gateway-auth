@@ -85,7 +85,7 @@ wsl sh -lc 'CODEBERT_WARN_ONLY=true docker compose --profile security run --rm c
 
 ## Uso en GitHub Actions
 
-El workflow `.github/workflows/ci.yml` construye la imagen y ejecuta el scanner
+El workflow `.github/workflows/ci-cd.yml` construye la imagen y ejecuta el scanner
 en Docker. En Pull Requests analiza solo archivos modificados; en `push` analiza
 `backend/src`, `frontend/src` y `services`.
 

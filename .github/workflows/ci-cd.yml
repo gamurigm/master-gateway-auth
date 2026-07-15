@@ -12,6 +12,10 @@ on:
       - test
       - main
 
+concurrency:
+  group: ci-cd-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ──────────────────────────────────────────────────────────────
   # ESTRATEGIA 1: Detectar si hay cambios en código fuente
@@ -44,7 +48,7 @@ jobs:
               - 'services/**/*.ts'
               - 'backend/prisma/schema.prisma'
               - 'security/**'
-              - '.github/workflows/ci.yml'
+              - '.github/workflows/ci-cd.yml'
               - 'sonar-project.properties'
 
   # ──────────────────────────────────────────────────────────────

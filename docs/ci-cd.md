@@ -97,12 +97,12 @@ Variables utiles:
 | `CODEBERT_THRESHOLD` | Umbral de bloqueo, por defecto `0.85` |
 | `CODEBERT_WARN_ONLY` | Si es `true`, genera reporte pero no falla el proceso |
 
-El workflow `.github/workflows/ci.yml` ejecuta este scanner despues de build y
+El workflow `.github/workflows/ci-cd.yml` ejecuta este scanner despues de build y
 pruebas. En Pull Requests analiza archivos modificados; en `push` analiza las
 rutas principales del proyecto.
 ## GitHub Actions
 
-El workflow `.github/workflows/ci.yml` ejecuta:
+El workflow `.github/workflows/ci-cd.yml` ejecuta:
 
 - Prisma validate.
 - Build backend.

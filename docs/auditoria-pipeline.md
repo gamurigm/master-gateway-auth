@@ -96,3 +96,17 @@ tres de severidad alta y uno moderado. Las cadenas vulnerables procedían de
 
 Esta sección se actualizará después de cada push relevante para conservar el ID,
 el resultado y el siguiente fallo real encontrado.
+
+## Hallazgo 4: despliegues concurrentes fuera de orden
+
+Los jobs de un commit nuevo podían adelantar a un commit anterior que todavía
+estuviera ejecutando CodeBERT. Ambos terminaban invocando Render y la revisión
+antigua podía desplegarse después de la nueva.
+
+### Corrección
+
+- Se añadió un grupo de concurrencia por workflow y rama con
+  `cancel-in-progress: true`, de modo que un push nuevo cancela la ejecución
+  obsoleta antes de publicar.
+- El archivo se renombró a `.github/workflows/ci-cd.yml`, nombre solicitado en
+  el anexo de infraestructura del PDF.
