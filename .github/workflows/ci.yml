@@ -44,6 +44,8 @@ jobs:
               - 'services/**/*.ts'
               - 'backend/prisma/schema.prisma'
               - 'security/**'
+              - '.github/workflows/ci.yml'
+              - 'sonar-project.properties'
 
   # ──────────────────────────────────────────────────────────────
   # Build + Tests (siempre corre, es la base de todo)
@@ -167,7 +169,6 @@ jobs:
 
       - name: SonarQube analysis
         id: sonar_analysis
-        continue-on-error: true
         run: npm run sonar:scan -- -Dsonar.token="$SONAR_TOKEN"
 
       - name: Read SonarQube Quality Gate
@@ -202,18 +203,15 @@ jobs:
         run: |
           GATE="${{ steps.read_gate.outputs.gate_status }}"
           echo "Quality Gate status: $GATE"
-          if [ "${{ steps.sonar_analysis.outcome }}" = "success" ]; then
-            if [ "$GATE" = "OK" ]; then
-              echo "Quality Gate passed!"
-            elif [ "$GATE" = "NONE" ] || [ "$GATE" = "UNKNOWN" ]; then
-              echo "::warning::Quality Gate status is $GATE (first analysis or no data yet). Continuing."
-            else
-              echo "::error::SonarQube Community Quality Gate failed: $GATE"
-              exit 1
-            fi
-          else
-            echo "::warning::SonarQube analysis did not complete successfully (outcome: ${{ steps.sonar_analysis.outcome }}). Skipping gate enforcement."
+          if [ "${{ steps.sonar_analysis.outcome }}" != "success" ]; then
+            echo "::error::SonarQube analysis failed; deployment is blocked."
+            exit 1
           fi
+          if [ "$GATE" != "OK" ]; then
+            echo "::error::SonarQube Community Quality Gate did not pass: $GATE"
+            exit 1
+          fi
+          echo "Quality Gate passed!"
 
       - name: Stop SonarQube
         if: always()
@@ -238,11 +236,11 @@ jobs:
     if: |
       always() &&
       needs.build-test.result == 'success' &&
-      needs.detect-changes.outputs.has_code == 'true' &&
+      needs.detect-changes.outputs.has_security_relevant == 'true' &&
       (
         (github.event_name == 'pull_request') ||
         (github.ref == 'refs/heads/test') ||
-        (github.ref == 'refs/heads/main' && needs.sonarqube.outputs.gate_status != 'OK' && needs.sonarqube.outputs.gate_status != 'NONE')
+        (github.ref == 'refs/heads/main' && needs.sonarqube.result == 'success' && needs.sonarqube.outputs.gate_status == 'OK')
       )
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -501,8 +499,12 @@ jobs:
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       needs.build-test.result == 'success' &&
-      (needs.sonarqube.result == 'success' || needs.sonarqube.outputs.gate_status == 'OK') &&
-      (needs.codebert-sast.result == 'success' || needs.codebert-sast.result == 'skipped')
+      needs.sonarqube.result == 'success' &&
+      needs.sonarqube.outputs.gate_status == 'OK' &&
+      (
+        needs.codebert-sast.result == 'success' ||
+        (needs.detect-changes.outputs.has_security_relevant != 'true' && needs.codebert-sast.result == 'skipped')
+      )
     needs:
       - build-test
       - detect-changes

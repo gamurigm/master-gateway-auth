@@ -66,10 +66,19 @@ complementarios y ambos deben pasar antes del despliegue. También permite que u
 fallo técnico del análisis Sonar se convierta en una advertencia y no bloquee la
 entrega.
 
-Estado: pendiente de corrección y validación en una ejecución posterior.
+### Corrección
+
+- El análisis Sonar ya no usa `continue-on-error`.
+- Un análisis fallido o un estado distinto de `OK` bloquea el job.
+- En `main`, CodeBERT solo comienza después de que Sonar finaliza con Quality
+  Gate `OK`; un cambio relevante no puede llegar a Render si CodeBERT fue
+  omitido.
+- Los cambios al propio workflow o a `sonar-project.properties` se consideran
+  relevantes para seguridad, por lo que también ejercitan el SAST ML.
+
+Estado: corregido; pendiente de validación en GitHub Actions.
 
 ## Registro de ejecuciones
 
 Esta sección se actualizará después de cada push relevante para conservar el ID,
 el resultado y el siguiente fallo real encontrado.
-
