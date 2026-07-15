@@ -94,8 +94,18 @@ tres de severidad alta y uno moderado. Las cadenas vulnerables procedían de
 
 ## Registro de ejecuciones
 
-Esta sección se actualizará después de cada push relevante para conservar el ID,
-el resultado y el siguiente fallo real encontrado.
+| Ejecución | Commit | Resultado | Evidencia |
+| --- | --- | --- | --- |
+| `29263350764` | `97d0734` | Fallo | `JWE_SECRET is required`; Render no comenzó el despliegue |
+| `29392183372` | `3766e88` | Éxito | La configuración reparada superó Render y desplegó por CLI |
+| `29392266836` | `2e503b2` | Cancelada al quedar obsoleta | Sonar y CodeBERT pasaron; el deploy terminó antes de procesarse la cancelación |
+| `29392718840` | `780f641` | Éxito | Build, pruebas, Quality Gate, CodeBERT y Render finalizaron correctamente |
+
+Comprobación posterior al último despliegue:
+
+- `GET https://master-gateway-auth.onrender.com/api/health`: `status=ok`.
+- `GET https://master-gateway-auth.onrender.com/api/health/db`: `status=ok`,
+  `database=postgresql`.
 
 ## Hallazgo 4: despliegues concurrentes fuera de orden
 
@@ -110,3 +120,21 @@ antigua podía desplegarse después de la nueva.
   obsoleta antes de publicar.
 - El archivo se renombró a `.github/workflows/ci-cd.yml`, nombre solicitado en
   el anexo de infraestructura del PDF.
+
+## Brechas de cumplimiento que permanecen
+
+La depuración anterior deja funcional el pipeline, pero la revisión del proyecto
+encontró diferencias adicionales frente al PDF que deben tratarse en una fase
+posterior y no se presentan aquí como completadas:
+
+1. El job usa una instancia efímera de SonarQube Community. El PDF nombra
+   específicamente SonarCloud; migrarlo requiere crear/vincular el proyecto y
+   configurar `SONAR_TOKEN` y la organización en GitHub.
+2. `dev` está 14 commits detrás de `main` y `test` tiene divergencia. Además, los
+   cambios históricos y esta depuración entraron directamente a `main`; para el
+   modelo estricto del PDF se deben sincronizar las ramas y activar protección de
+   `main` para aceptar únicamente Pull Requests desde `test`.
+3. El frontend sí consume el árbol y registra rutas dinámicas, pero conserva
+   rutas administrativas base y enlaces del sidebar escritos en código
+   (`app-route-children.ts` y `shell.component.ts`). Esto no cumple literalmente
+   la prohibición de rutas hardcodeadas.
