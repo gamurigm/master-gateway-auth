@@ -36,7 +36,7 @@ COPY backend/package.json backend/package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/backend/dist backend/dist
 COPY --from=build /app/backend/prisma backend/prisma
-COPY --from=build /app/frontend/dist frontend/dist
+COPY --from=build /app/frontend-vue/dist frontend/dist
 
 RUN mkdir -p /app/keys
 
