@@ -1,65 +1,69 @@
 import { UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { GatewaySessionService } from './gateway-session.service';
 
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
-  let jwtService: JwtService;
+  const gatewaySessionService = {
+    resolveAccessToken: jest.fn(),
+  };
 
   const mockContext = (authorization?: string) => {
-    const request = { headers: { authorization } };
+    const request = { headers: { authorization }, user: undefined as unknown };
     return {
-      switchToHttp: () => ({
-        getRequest: () => request,
-      }),
-    } as any;
+      request,
+      context: {
+        switchToHttp: () => ({ getRequest: () => request }),
+      } as any,
+    };
   };
 
   beforeEach(() => {
-    jwtService = { verifyAsync: jest.fn() } as any;
-    guard = new JwtAuthGuard(jwtService);
+    jest.clearAllMocks();
+    guard = new JwtAuthGuard(
+      gatewaySessionService as unknown as GatewaySessionService,
+    );
   });
 
-  it('allows access with valid Bearer token', async () => {
-    const context = mockContext('Bearer valid-token');
-    (jwtService.verifyAsync as jest.Mock).mockResolvedValue({ sub: 'user-id', roleId: 'role-id' });
+  it('allows access and attaches the session resolved by Master Gateway', async () => {
+    gatewaySessionService.resolveAccessToken.mockResolvedValue({
+      sub: 'user-id',
+      jti: 'access-jti',
+      sid: 'session-id',
+      roleId: 'role-id',
+      roleName: 'ADMIN',
+    });
+    const { context, request } = mockContext('Bearer encrypted-token');
 
-    const result = await guard.canActivate(context);
-
-    expect(result).toBe(true);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(gatewaySessionService.resolveAccessToken).toHaveBeenCalledWith(
+      'encrypted-token',
+    );
+    expect(request.user).toMatchObject({
+      sub: 'user-id',
+      roleId: 'role-id',
+      roleName: 'ADMIN',
+    });
   });
 
-  it('throws UnauthorizedException when no Authorization header', async () => {
-    const context = mockContext();
+  it.each([undefined, 'Basic token'])(
+    'rejects a missing or malformed Authorization header',
+    async (authorization) => {
+      const { context } = mockContext(authorization);
+      await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    },
+  );
 
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
-  });
+  it('rejects invalid tokens', async () => {
+    gatewaySessionService.resolveAccessToken.mockRejectedValue(
+      new UnauthorizedException(),
+    );
+    const { context } = mockContext('Bearer invalid-token');
 
-  it('throws UnauthorizedException when header does not start with Bearer', async () => {
-    const context = mockContext('Basic token');
-
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
-  });
-
-  it('throws UnauthorizedException when token is invalid or expired', async () => {
-    const context = mockContext('Bearer bad-token');
-    (jwtService.verifyAsync as jest.Mock).mockRejectedValue(new Error('Token expired'));
-
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
-  });
-
-  it('sets user on request when token is valid', async () => {
-    const request = { headers: { authorization: 'Bearer valid-token' } } as { headers: { authorization: string }; user?: unknown };
-    const context = {
-      switchToHttp: () => ({
-        getRequest: () => request,
-      }),
-    } as any;
-    const payload = { sub: 'user-id', roleId: 'role-id', roleName: 'ADMIN' };
-    (jwtService.verifyAsync as jest.Mock).mockResolvedValue(payload);
-
-    await guard.canActivate(context);
-
-    expect(request.user).toEqual(payload);
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 });

@@ -4,10 +4,14 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { EncryptJWT } from 'jose';
 import { createHash, randomUUID } from 'node:crypto';
+import { GatewaySessionService } from '../common/auth/gateway-session.service';
+import { decryptGatewayToken } from '../common/auth/jwe-token';
 import { omitPassword } from '../common/utils/omit-password';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
@@ -22,8 +26,7 @@ type TempTokenPayload = {
 type GatewayTokenPayload = {
   sub: string;
   jti: string;
-  roleId: string;
-  roleName?: string;
+  sid?: string;
 };
 
 type SessionTokens = {
@@ -35,9 +38,6 @@ type SessionTokens = {
   role: { id: string; name: string };
 };
 
-type DecodedJwt = {
-  exp?: number;
-};
 
 @Injectable()
 export class AuthService {
@@ -46,6 +46,8 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly gatewaySessionService: GatewaySessionService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -147,13 +149,17 @@ export class AuthService {
       include: { role: true },
     });
 
-    if (!storedToken || storedToken.estado !== Estado.ACTIVO) {
+    if (
+      !storedToken ||
+      storedToken.userId !== payload.sub ||
+      storedToken.estado !== Estado.ACTIVO
+    ) {
       this.logger.warn(
         JSON.stringify({
           event: 'auth.refresh.denied',
           reason: 'not_found_or_inactive',
           userId: payload.sub,
-          roleId: payload.roleId,
+          refreshJti: payload.jti,
         }),
       );
       throw new UnauthorizedException('Refresh token invalido');
@@ -292,15 +298,13 @@ export class AuthService {
     }
 
     try {
-      const payload = await this.jwtService.verifyAsync<GatewayTokenPayload>(
-        token,
-      );
+      const session = await this.gatewaySessionService.resolveAccessToken(token);
 
       return {
         valid: true,
-        userId: payload.sub,
-        roleId: payload.roleId,
-        roleName: payload.roleName,
+        userId: session.sub,
+        roleId: session.roleId,
+        roleName: session.roleName,
       };
     } catch {
       this.logger.warn(
@@ -323,9 +327,14 @@ export class AuthService {
 
   private async verifyRefreshToken(refreshToken: string) {
     try {
-      return await this.jwtService.verifyAsync<GatewayTokenPayload>(
+      const payload = (await decryptGatewayToken(
         refreshToken,
-      );
+        this.configService,
+      )) as GatewayTokenPayload;
+      if (!payload.sub || !payload.jti) {
+        throw new Error('Refresh token incompleto');
+      }
+      return payload;
     } catch {
       throw new UnauthorizedException('Refresh token invalido o expirado');
     }
@@ -339,31 +348,47 @@ export class AuthService {
     const accessJti = randomUUID();
     const refreshJti = randomUUID();
 
-    const accessToken = await this.jwtService.signAsync(
-      {
-        sub: userId,
-        jti: accessJti,
-        roleId,
-        roleName,
-      } satisfies GatewayTokenPayload,
-      { expiresIn: '15m' },
-    );
+    const jweSecret = this.configService.get<string>('JWE_SECRET');
+    if (!jweSecret) {
+      throw new Error('JWE_SECRET no configurado');
+    }
 
-    const refreshToken = await this.jwtService.signAsync(
-      {
-        sub: userId,
-        jti: refreshJti,
-        roleId,
-        roleName,
-      } satisfies GatewayTokenPayload,
-      { expiresIn: '7d' },
-    );
+    const secret = new TextEncoder().encode(jweSecret);
 
-    const decoded: unknown = this.jwtService.decode(refreshToken);
-    const expiresAt =
-      isDecodedJwt(decoded) && decoded.exp
-        ? new Date(decoded.exp * 1000)
-        : this.addDays(new Date(), 7);
+    const accessToken = await new EncryptJWT({
+      sub: userId,
+      jti: accessJti,
+      sid: refreshJti,
+    } satisfies GatewayTokenPayload)
+      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+      .setIssuedAt()
+      .setExpirationTime('15m')
+      .setIssuer(
+        this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
+      )
+      .setAudience(
+        this.configService.get<string>('JWT_AUDIENCE') ??
+          'master-gateway-clients',
+      )
+      .encrypt(secret);
+
+    const refreshToken = await new EncryptJWT({
+      sub: userId,
+      jti: refreshJti,
+    } satisfies GatewayTokenPayload)
+      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+      .setIssuedAt()
+      .setExpirationTime('7d')
+      .setIssuer(
+        this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
+      )
+      .setAudience(
+        this.configService.get<string>('JWT_AUDIENCE') ??
+          'master-gateway-clients',
+      )
+      .encrypt(secret);
+
+    const expiresAt = this.addDays(new Date(), 7);
 
     await this.prisma.refreshToken.create({
       data: {
@@ -393,9 +418,7 @@ export class AuthService {
   }
 
   private isAllowedInternalService(serviceName: string | undefined) {
-    const allowedServices = (
-      process.env['INTERNAL_ALLOWED_SERVICES'] ?? ''
-    )
+    const allowedServices = (process.env['INTERNAL_ALLOWED_SERVICES'] ?? '')
       .split(',')
       .map((service) => service.trim())
       .filter(Boolean);
@@ -409,13 +432,4 @@ export class AuthService {
       .digest('hex')
       .slice(0, 16);
   }
-}
-
-function isDecodedJwt(value: unknown): value is DecodedJwt {
-  if (!value || typeof value !== 'object' || !('exp' in value)) {
-    return false;
-  }
-
-  const { exp } = value as { exp?: unknown };
-  return typeof exp === 'number';
 }

@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
 COPY services/ventas/package.json services/ventas/package.json
+COPY services/inventario/package.json services/inventario/package.json
 COPY backend/prisma backend/prisma
 
 RUN npm ci

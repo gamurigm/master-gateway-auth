@@ -6,8 +6,7 @@ export class CreateModuleDto {
   @IsString()
   @MaxLength(50)
   @Matches(/^[A-Z_]+$/, {
-    message:
-      'El codigo del modulo solo puede contener mayusculas y guion bajo',
+    message: 'El codigo del modulo solo puede contener mayusculas y guion bajo',
   })
   code!: string;
 

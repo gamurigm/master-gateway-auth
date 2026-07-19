@@ -1,4 +1,13 @@
 services:
+  - type: pserv
+    name: master-gateway-opa
+    env: docker
+    dockerfilePath: security/opa/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: PORT
+        value: 8181
+
   - type: web
     name: master-gateway
     env: docker
@@ -6,6 +15,14 @@ services:
     dockerContext: .
     envVars:
       - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: JWT_ISSUER
+        value: master-gateway
+      - key: JWT_AUDIENCE
+        value: master-gateway-clients
+      - key: JWE_SECRET
         sync: false
       - key: JWT_SECRET
         sync: false
@@ -15,6 +32,13 @@ services:
         sync: false
       - key: INTERNAL_API_KEY
         sync: false
+      - key: INTERNAL_ALLOWED_SERVICES
+        value: ventas,inventario
+      - key: OPA_URL
+        fromService:
+          type: pserv
+          name: master-gateway-opa
+          property: hostport
       - key: SEED_ADMIN_EMAIL
         value: admin@example.com
       - key: SEED_ADMIN_PASSWORD

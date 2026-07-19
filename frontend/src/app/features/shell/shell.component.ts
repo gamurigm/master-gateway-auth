@@ -1,38 +1,68 @@
-import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
-import { Route, Router, RouterOutlet } from '@angular/router';
-import { MenuModule, MenuNode } from '../../core/api.models';
-import { AuthService } from '../../core/auth.service';
-import { MenuService } from '../../core/menu.service';
-import { baseAppChildren } from '../../app-route-children';
-import { DashboardComponent } from '../dashboard/dashboard.component';
-import { DynamicPageComponent } from '../dynamic-page/dynamic-page.component';
-import { UserListComponent } from '../user-list/user-list.component';
-import { RoleListComponent } from '../role-list/role-list.component';
-import { ModuleListComponent } from '../module-list/module-list.component';
-import { MenuListComponent } from '../menu-list/menu-list.component';
-import { MenuItemComponent } from './menu-item.component';
+﻿import { CommonModule } from "@angular/common";
+import { Component, OnInit, inject } from "@angular/core";
+import {
+  Route,
+  Router,
+  RouterOutlet,
+} from "@angular/router";
+import { MenuModule, MenuNode } from "../../core/api.models";
+import { AuthService } from "../../core/auth.service";
+import { MenuService } from "../../core/menu.service";
+import { baseAppChildren } from "../../app-route-children";
+import { DashboardComponent } from "../dashboard/dashboard.component";
+import { DynamicPageComponent } from "../dynamic-page/dynamic-page.component";
+import { UserListComponent } from "../user-list/user-list.component";
+import { RoleListComponent } from "../role-list/role-list.component";
+import { ModuleListComponent } from "../module-list/module-list.component";
+import { MenuListComponent } from "../menu-list/menu-list.component";
+import { InventoryListComponent } from "../inventory-list/inventory-list.component";
+import { MenuItemComponent } from "./menu-item.component";
 
 @Component({
-  selector: 'app-shell',
+  selector: "app-shell",
   standalone: true,
-  imports: [CommonModule, RouterOutlet, MenuItemComponent],
+  imports: [
+    CommonModule,
+    RouterOutlet,
+    MenuItemComponent,
+  ],
   template: `
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <strong>Master Gateway</strong>
-          <span>{{ roleName }}</span>
+          <span class="brand-mark">MG</span>
+          <div>
+            <strong>Master Gateway</strong>
+            <span>{{ roleName }}</span>
+          </div>
         </div>
 
-        <nav>
-          <section *ngFor="let module of modules" class="menu-module">
-            <h2>{{ module.name }}</h2>
-            <app-menu-item *ngFor="let item of module.menus" [node]="item" />
-          </section>
+        <nav class="side-nav" aria-label="Navegacion principal">
+          <div *ngIf="menuLoading" class="nav-state">
+            <span class="state-spinner"></span>
+            <strong>Cargando navegacion</strong>
+          </div>
+
+          <div *ngIf="!menuLoading && menuError" class="nav-state nav-error">
+            <strong>No se pudo cargar la navegacion</strong>
+            <button type="button" class="secondary-button compact-action" (click)="loadNavigation()">Reintentar</button>
+          </div>
+
+          <ng-container *ngIf="!menuLoading && !menuError">
+            <section *ngFor="let module of modules" class="menu-module">
+              <h2>{{ module.name }}</h2>
+              <app-menu-item *ngFor="let item of module.menus" [node]="item" />
+            </section>
+
+            <div *ngIf="modules.length === 0" class="nav-state">
+              <strong>Sin navegacion asignada</strong>
+            </div>
+          </ng-container>
         </nav>
 
-        <button type="button" class="secondary-button" (click)="logout()">Cerrar sesion</button>
+        <button type="button" class="secondary-button logout-button" (click)="logout()">
+          Cerrar sesion
+        </button>
       </aside>
 
       <main class="workspace">
@@ -45,87 +75,133 @@ import { MenuItemComponent } from './menu-item.component';
       .shell {
         min-height: 100vh;
         display: grid;
-        grid-template-columns: 280px 1fr;
-        background: var(--bg-gradient);
+        grid-template-columns: 300px minmax(0, 1fr);
+        background:
+          radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 32rem),
+          linear-gradient(135deg, #f6f8fb 0%, #eef3f8 100%);
       }
 
       .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
         display: flex;
         flex-direction: column;
         gap: 24px;
-        background: var(--glass-bg);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-right: 1px solid var(--glass-border);
-        padding: 32px 24px;
-        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02);
+        background: rgba(255, 255, 255, 0.92);
+        border-right: 1px solid rgba(148, 163, 184, 0.22);
+        padding: 24px;
+        box-shadow: 12px 0 36px rgba(15, 23, 42, 0.06);
         z-index: 10;
       }
 
       .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
         display: grid;
-        gap: 6px;
-        padding-bottom: 24px;
-        border-bottom: 1px solid rgba(0,0,0,0.06);
+        place-items: center;
+        color: #ffffff;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+        background: linear-gradient(135deg, #2563eb, #0f766e);
+        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
       }
 
       .brand strong {
-        font-size: 22px;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        background: linear-gradient(90deg, #0f172a, #3b82f6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        display: block;
+        color: #0f172a;
+        font-size: 17px;
+        font-weight: 850;
+        letter-spacing: -0.03em;
       }
 
-      .brand span {
-        color: var(--text-muted);
-        font-size: 13px;
-        font-weight: 500;
+      .brand span:not(.brand-mark) {
+        display: block;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.08em;
       }
 
-      nav {
+      .side-nav {
         display: grid;
-        gap: 24px;
+        gap: 20px;
         flex: 1;
         overflow-y: auto;
+        padding-right: 4px;
       }
-      
-      nav::-webkit-scrollbar {
-        width: 4px;
+
+      .nav-state {
+        display: grid;
+        gap: 10px;
+        color: #64748b;
+        font-size: 13px;
+        font-weight: 750;
       }
-      nav::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 4px;
+
+      .nav-error {
+        color: #991b1b;
       }
 
       .menu-module h2 {
-        margin: 0 0 12px;
-        font-size: 11px;
+        margin: 0 0 10px;
         color: #94a3b8;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        font-weight: 700;
+      }
+
+      .menu-link {
+        display: flex;
+        align-items: center;
+        min-height: 42px;
+        color: #334155;
+        text-decoration: none;
+        border-radius: 12px;
+        padding: 0 14px;
+        font-weight: 750;
+        font-size: 14px;
+        transition: all 0.18s ease;
+      }
+
+      .menu-link:hover,
+      .menu-link.active {
+        color: #0f172a;
+        background: #eef6ff;
+        box-shadow: inset 3px 0 0 #2563eb;
+      }
+
+      .logout-button {
+        width: 100%;
       }
 
       .workspace {
-        padding: 40px;
-        overflow-y: auto;
+        min-width: 0;
+        padding: 32px 40px;
       }
 
-      @media (max-width: 800px) {
+      @media (max-width: 900px) {
         .shell {
           grid-template-columns: 1fr;
         }
 
         .sidebar {
-          border-right: 0;
-          border-bottom: 1px solid rgba(0,0,0,0.06);
-          padding: 20px;
+          position: static;
+          height: auto;
         }
-        
+
         .workspace {
           padding: 20px;
         }
@@ -139,35 +215,43 @@ export class ShellComponent implements OnInit {
   private readonly router = inject(Router);
 
   modules: MenuModule[] = [];
-  roleName = this.authService.getCurrentRole()?.name ?? 'Sin rol';
+  menuLoading = true;
+  menuError = "";
+  roleName = this.authService.getCurrentRole()?.name ?? "Sin rol";
 
   ngOnInit() {
+    this.loadNavigation();
+  }
+
+  loadNavigation() {
+    this.menuLoading = true;
+    this.menuError = "";
     this.menuService.tree().subscribe({
       next: (modules) => {
-        this.modules = modules;
-        this.registerDynamicRoutes(modules);
+        this.modules = Array.isArray(modules) ? modules : [];
+        this.menuLoading = false;
+        this.registerDynamicRoutes(this.modules);
       },
       error: () => {
         this.modules = [];
+        this.menuLoading = false;
+        this.menuError = "No se pudo cargar el menu del rol activo.";
       },
     });
   }
 
   logout() {
-    this.authService.logout().subscribe({
-      next: () => void this.router.navigateByUrl('/login'),
-      error: () => {
-        this.authService.clearSession();
-        void this.router.navigateByUrl('/login');
-      },
-    });
+    const logoutRequest = this.authService.logout();
+    this.authService.clearSession();
+    void this.router.navigateByUrl("/login");
+    logoutRequest.subscribe({ error: () => undefined });
   }
 
   private registerDynamicRoutes(modules: MenuModule[]) {
     const dynamicChildren = this.flattenMenuRoutes(modules);
     const children = this.mergeChildren(baseAppChildren, dynamicChildren);
     const nextConfig = this.router.config.map((route) =>
-      route.path === 'app'
+      route.path === "app"
         ? {
             ...route,
             children,
@@ -179,22 +263,23 @@ export class ShellComponent implements OnInit {
   }
 
   private readonly routeMap: Record<string, any> = {
-    'users': UserListComponent,
-    'roles': RoleListComponent,
-    'modules': ModuleListComponent,
-    'menus': MenuListComponent,
+    users: UserListComponent,
+    roles: RoleListComponent,
+    modules: ModuleListComponent,
+    menus: MenuListComponent,
+    inventario: InventoryListComponent,
   };
 
   private flattenMenuRoutes(modules: MenuModule[]): Route[] {
     const routes: Route[] = [];
 
     const visit = (node: MenuNode) => {
-      if (node.url?.startsWith('/app/')) {
-        const path = node.url.replace('/app/', '');
+      if (node.url?.startsWith("/app/")) {
+        const path = node.url.replace("/app/", "");
         const component = this.routeMap[path] ?? DynamicPageComponent;
         routes.push({ path, component, data: { title: node.name } });
       }
-      node.children.forEach(visit);
+      (node.children ?? []).forEach(visit);
     };
 
     modules.flatMap((module) => module.menus).forEach(visit);
@@ -204,17 +289,16 @@ export class ShellComponent implements OnInit {
   private mergeChildren(baseChildren: Route[], dynamicChildren: Route[]) {
     const merged = new Map<string, Route>();
     for (const route of baseChildren) {
-      merged.set(route.path ?? '', route);
+      merged.set(route.path ?? "", route);
     }
     for (const route of dynamicChildren) {
-      merged.set(route.path ?? '', route);
+      merged.set(route.path ?? "", route);
     }
 
-    if (!merged.has('')) {
-      merged.set('', { path: '', component: DashboardComponent });
+    if (!merged.has("")) {
+      merged.set("", { path: "", component: DashboardComponent });
     }
 
     return [...merged.values()];
   }
 }
-

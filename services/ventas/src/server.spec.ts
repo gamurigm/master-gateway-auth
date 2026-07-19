@@ -7,7 +7,7 @@ const baseConfig = {
   masterValidateUrl: 'http://master.local/api/internals/validate-token',
   internalApiKey: 'test-key',
   internalServiceName: 'ventas',
-  allowedRoles: ['ADMIN', 'VENTAS'],
+  allowedRoles: ['SUPERADMIN', 'ADMIN', 'VENTAS'],
   retryAttempts: 2,
   retryDelayMs: 0,
 };

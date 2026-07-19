@@ -1,3 +1,4 @@
-export const environment = {
+﻿export const environment = {
   apiUrl: "/api",
+  inventoryApiUrl: "/inventario",
 };

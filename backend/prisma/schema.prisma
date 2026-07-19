@@ -41,6 +41,7 @@ model Role {
   users       UserRole[]
   modules     RoleModule[]
   menus       RoleMenu[]
+  permissions RolePermission[]
   refreshTokens RefreshToken[]
 
   @@map("roles")
@@ -131,6 +132,42 @@ model RoleMenu {
 
   @@unique([roleId, menuId])
   @@map("rol_menus")
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique @map("codigo")
+  resource    String           @map("recurso")
+  action      String           @map("accion")
+  description String?          @map("descripcion")
+  delegable   Boolean          @default(true)
+  estado      Estado           @default(ACTIVO)
+  createdAt   DateTime         @default(now()) @map("fecha_creacion")
+  updatedAt   DateTime         @updatedAt @map("fecha_actualizacion")
+  createdBy   String?          @map("creado_por") @db.Uuid
+  updatedBy   String?          @map("actualizado_por") @db.Uuid
+  roles       RolePermission[]
+
+  @@index([resource])
+  @@index([action])
+  @@map("permisos")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid()) @db.Uuid
+  roleId       String     @map("rol_id") @db.Uuid
+  permissionId String     @map("permiso_id") @db.Uuid
+  estado       Estado     @default(ACTIVO)
+  createdAt    DateTime   @default(now()) @map("fecha_creacion")
+  updatedAt    DateTime   @updatedAt @map("fecha_actualizacion")
+  createdBy    String?    @map("creado_por") @db.Uuid
+  updatedBy    String?    @map("actualizado_por") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@index([permissionId])
+  @@map("rol_permisos")
 }
 
 model RefreshToken {
