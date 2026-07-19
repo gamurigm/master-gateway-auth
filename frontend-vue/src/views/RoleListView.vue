@@ -1,0 +1,257 @@
+<template>
+  <div class="admin-page">
+    <div class="admin-header">
+      <span class="eyebrow">Permisos</span>
+      <h1>Roles</h1>
+      <button class="primary-button" @click="openCreate">+ Nuevo rol</button>
+    </div>
+    <template v-if="loading">
+      <div class="list-state"><div class="state-spinner" /> Cargando...</div>
+    </template>
+    <template v-else-if="error">
+      <div class="error-state">
+        <p>{{ error }}</p>
+        <button class="secondary-button" @click="loadRoles">Reintentar</button>
+      </div>
+    </template>
+    <template v-else-if="roles.length === 0">
+      <div class="empty-state"><p>No hay roles registrados</p><button class="primary-button" @click="openCreate">+ Crear primer rol</button></div>
+    </template>
+    <table v-else class="crud-table">
+      <thead><tr><th>Nombre</th><th>Descripcion</th><th>Asignaciones</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+        <tr v-for="r in roles" :key="r.id">
+          <td><strong>{{ r.name }}</strong></td>
+          <td>{{ r.description || '—' }}</td>
+          <td>
+            <small>{{ r.users?.length || 0 }} usuarios, {{ r.modules?.length || 0 }} modulos, {{ r.menus?.length || 0 }} menus, {{ r.permissions?.length || 0 }} permisos</small>
+          </td>
+          <td><span class="badge" :class="r.estado === 'ACTIVO' ? 'badge-active' : 'badge-inactive'">{{ r.estado }}</span></td>
+          <td class="actions-cell">
+            <button class="icon-btn assign" title="Asignaciones" @click="openAssignments(r)"><AppIcon name="check-square" size="16" /></button>
+            <button class="icon-btn edit" title="Editar" @click="openEdit(r)"><AppIcon name="pencil" size="16" /></button>
+            <button class="icon-btn delete" title="Eliminar" @click="handleDelete(r)"><AppIcon name="trash-2" size="16" /></button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <ModalWrapper v-if="showFormModal" @close="closeForm">
+      <div class="modal-form">
+        <h2>{{ editingRole ? 'Editar rol' : 'Nuevo rol' }}</h2>
+        <div class="field"><label>Nombre</label><input v-model="form.name" required /></div>
+        <div class="field"><label>Descripcion</label><input v-model="form.description" /></div>
+        <p v-if="formError" class="error">{{ formError }}</p>
+        <div class="modal-actions">
+          <button class="secondary-button" @click="closeForm">Cancelar</button>
+          <button class="primary-button" :disabled="saving" @click="saveRole">{{ saving ? 'Guardando...' : 'Guardar' }}</button>
+        </div>
+      </div>
+    </ModalWrapper>
+    <ModalWrapper v-if="showAssignModal && assignRole" @close="closeAssign">
+      <div class="modal-form assignment-form">
+        <h2>Asignaciones: {{ assignRole.name }}</h2>
+        <div class="assignment-grid">
+          <div class="assignment-section">
+            <h3>Usuarios</h3>
+            <div v-for="u in allUsers" :key="u.id" class="assignment-row">
+              <label><input type="checkbox" :checked="isAssigned('user', u.id)" @change="toggleUser(u)" /> {{ u.email }}</label>
+            </div>
+          </div>
+          <div class="assignment-section">
+            <h3>Modulos</h3>
+            <div v-for="m in allModules" :key="m.id" class="assignment-row">
+              <label><input type="checkbox" :checked="isAssigned('module', m.id)" @change="toggleModule(m)" /> {{ m.name }}</label>
+            </div>
+          </div>
+          <div class="assignment-section wide">
+            <h3>Menus</h3>
+            <div v-for="m in allMenus" :key="m.id" class="assignment-row">
+              <label><input type="checkbox" :checked="isAssigned('menu', m.id)" @change="toggleMenu(m)" /> {{ m.name }}</label>
+            </div>
+          </div>
+          <div class="assignment-section wide">
+            <h3>Permisos</h3>
+            <div v-for="p in allPermissions" :key="p.id" class="assignment-row">
+              <label><input type="checkbox" :checked="isAssigned('permission', p.id)" @change="togglePermission(p)" /> <code>{{ p.code }}</code></label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions"><button class="primary-button" @click="closeAssign">Cerrar</button></div>
+      </div>
+    </ModalWrapper>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { rolesService } from '../services/roles.service'
+import { usersService } from '../services/users.service'
+import { modulesService } from '../services/modules.service'
+import { menuService } from '../services/menu.service'
+import { permissionsService } from '../services/permissions.service'
+import type { Role, RoleDetail, User, SystemModule, Menu, Permission } from '../types'
+import AppIcon from '../components/AppIcon.vue'
+import ModalWrapper from '../components/ModalWrapper.vue'
+
+const roles = ref<Role[]>([])
+const loading = ref(true)
+const error = ref('')
+
+const showFormModal = ref(false)
+const editingRole = ref<Role | null>(null)
+const saving = ref(false)
+const formError = ref('')
+const form = ref({ name: '', description: '' })
+
+const showAssignModal = ref(false)
+const assignRole = ref<Role | RoleDetail | null>(null)
+const allUsers = ref<User[]>([])
+const allModules = ref<SystemModule[]>([])
+const allMenus = ref<Menu[]>([])
+const allPermissions = ref<Permission[]>([])
+
+function openCreate() {
+  editingRole.value = null
+  form.value = { name: '', description: '' }
+  showFormModal.value = true
+}
+
+function openEdit(r: Role) {
+  editingRole.value = r
+  form.value = { name: r.name, description: r.description || '' }
+  showFormModal.value = true
+}
+
+function closeForm() {
+  showFormModal.value = false
+  editingRole.value = null
+}
+
+function isAssigned(type: 'user' | 'module' | 'menu' | 'permission', id: string): boolean {
+  if (!assignRole.value) return false
+  const r = assignRole.value as Role | RoleDetail
+  if (type === 'user') return (r as Role).users?.some((a) => a.role.id === id) ?? false
+  if (type === 'module') return (r as Role).modules?.some((a) => a.module.id === id) ?? false
+  if (type === 'menu') return (r as Role).menus?.some((a) => a.menu.id === id) ?? false
+  return (r as Role).permissions?.some((a) => a.permission.id === id) ?? false
+}
+
+async function loadRoles() {
+  loading.value = true
+  error.value = ''
+  try {
+    const { data } = await rolesService.findAll()
+    roles.value = data
+  } catch {
+    error.value = 'Error al cargar roles'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function saveRole() {
+  saving.value = true
+  formError.value = ''
+  try {
+    if (editingRole.value) {
+      await rolesService.update(editingRole.value.id, form.value)
+    } else {
+      await rolesService.create(form.value)
+    }
+    closeForm()
+    await loadRoles()
+  } catch (e: unknown) {
+    formError.value = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Error al guardar'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function handleDelete(r: Role) {
+  if (!confirm(`¿Eliminar rol ${r.name}?`)) return
+  try {
+    await rolesService.remove(r.id)
+    await loadRoles()
+  } catch {
+    error.value = 'Error al eliminar rol'
+  }
+}
+
+async function openAssignments(r: Role) {
+  assignRole.value = r
+  showAssignModal.value = true
+  try {
+    const [usersRes, modulesRes, menusRes, permsRes] = await Promise.all([
+      usersService.findAll(1, 999),
+      modulesService.findAll(),
+      menuService.findAll(),
+      permissionsService.findAll(),
+    ])
+    allUsers.value = usersRes.data.items
+    allModules.value = modulesRes.data
+    allMenus.value = menusRes.data
+    allPermissions.value = permsRes.data
+  } catch {
+    error.value = 'Error al cargar datos de asignacion'
+  }
+}
+
+function closeAssign() {
+  showAssignModal.value = false
+  assignRole.value = null
+}
+
+function reloadRoleSnapshot() {
+  if (assignRole.value) {
+    rolesService.findOne(assignRole.value.id).then(({ data }) => {
+      assignRole.value = data
+    })
+  }
+}
+
+async function toggleUser(u: User) {
+  if (!assignRole.value) return
+  const assigned = assignRole.value.users?.some((a) => a.role.id === u.id)
+  try {
+    if (assigned) await rolesService.unassignUser(assignRole.value.id, u.id)
+    else await rolesService.assignUser(assignRole.value.id, u.id)
+    reloadRoleSnapshot()
+    await loadRoles()
+  } catch {}
+}
+
+async function toggleModule(m: SystemModule) {
+  if (!assignRole.value) return
+  const assigned = assignRole.value.modules?.some((a) => a.module.id === m.id)
+  try {
+    if (assigned) await rolesService.unassignModule(assignRole.value.id, m.id)
+    else await rolesService.assignModule(assignRole.value.id, m.id)
+    reloadRoleSnapshot()
+    await loadRoles()
+  } catch {}
+}
+
+async function toggleMenu(m: Menu) {
+  if (!assignRole.value) return
+  const assigned = assignRole.value.menus?.some((a) => a.menu.id === m.id)
+  try {
+    if (assigned) await rolesService.unassignMenu(assignRole.value.id, m.id)
+    else await rolesService.assignMenu(assignRole.value.id, m.id)
+    reloadRoleSnapshot()
+    await loadRoles()
+  } catch {}
+}
+
+async function togglePermission(p: Permission) {
+  if (!assignRole.value) return
+  const assigned = assignRole.value.permissions?.some((a) => a.permission.id === p.id)
+  try {
+    if (assigned) await rolesService.unassignPermission(assignRole.value.id, p.id)
+    else await rolesService.assignPermission(assignRole.value.id, p.id)
+    reloadRoleSnapshot()
+    await loadRoles()
+  } catch {}
+}
+
+onMounted(loadRoles)
+</script>

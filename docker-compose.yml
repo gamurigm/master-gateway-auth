@@ -156,6 +156,18 @@ services:
     command: ["node", "auto-register-kong.js"]
     restart: "no"  # Solo se ejecuta una vez
 
+  frontend-vue:
+    build:
+      context: .
+      dockerfile: frontend-vue/Dockerfile
+    container_name: master-gateway-frontend-vue
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_VUE_PORT:-4201}:80"
+
   frontend:
     build:
       context: .

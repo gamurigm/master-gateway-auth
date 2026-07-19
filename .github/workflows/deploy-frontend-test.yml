@@ -61,7 +61,7 @@ jobs:
             --retry-all-errors \
             --retry-delay 5 \
             "$FRONTEND_URL/")
-          grep -q '<app-root' <<< "$page"
+          grep -q 'id="app"' <<< "$page"
 
           cors_headers=$(curl --fail --show-error --silent --include \
             --request OPTIONS \
