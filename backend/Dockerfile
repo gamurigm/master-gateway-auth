@@ -8,7 +8,6 @@ RUN apt-get update -y \
 
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
-COPY frontend-vue/package.json frontend-vue/package.json
 COPY services/ventas/package.json services/ventas/package.json
 
 COPY backend/prisma backend/prisma
@@ -17,10 +16,7 @@ RUN npm install --no-audit --no-fund
 
 COPY backend backend
 
-COPY frontend-vue frontend-vue
-
-RUN npm run build -w backend \
-    && npm run build -w frontend-vue
+RUN npm run build -w backend
 
 FROM node:24.15.0-bookworm-slim AS runtime
 
@@ -36,7 +32,6 @@ COPY backend/package.json backend/package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/backend/dist backend/dist
 COPY --from=build /app/backend/prisma backend/prisma
-COPY --from=build /app/frontend-vue/dist frontend/dist
 
 RUN mkdir -p /app/keys
 
