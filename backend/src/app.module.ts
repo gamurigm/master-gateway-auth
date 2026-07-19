@@ -1,6 +1,8 @@
+import { join } from 'node:path';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -22,6 +24,10 @@ import { UsersModule } from './users/users.module';
         limit: 120,
       },
     ]),
+    ServeStaticModule.forRoot({
+      rootPath: process.env.FRONTEND_DIST_PATH ?? join(__dirname, '..', '..', '..', 'frontend', 'dist'),
+      exclude: ['/api/(.*)', '/health(.*)'],
+    }),
     PrismaModule,
     AuthModule,
     UsersModule,
