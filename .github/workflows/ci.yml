@@ -36,11 +36,15 @@ jobs:
               - 'frontend/src/**/*.ts'
               - 'frontend/src/**/*.tsx'
               - 'frontend/src/**/*.html'
+              - 'frontend-vue/src/**/*.ts'
+              - 'frontend-vue/src/**/*.vue'
               - 'services/**/*.ts'
             has_security_relevant:
               - 'backend/src/**/*.ts'
               - 'frontend/src/**/*.ts'
               - 'frontend/src/**/*.tsx'
+              - 'frontend-vue/src/**/*.ts'
+              - 'frontend-vue/src/**/*.vue'
               - 'services/**/*.ts'
               - 'backend/prisma/schema.prisma'
               - 'security/**'
@@ -89,10 +93,13 @@ jobs:
       - name: Ventas tests
         run: npm run test -w ventas
 
-      - name: Frontend type check
-        run: npm run lint -w frontend
+      - name: Inventario build
+        run: npm run build -w inventario
 
-      - name: Frontend build
+      - name: Inventario tests
+        run: npm run test -w inventario
+
+      - name: Frontend build (Vue)
         run: npm run build:frontend
 
   # ──────────────────────────────────────────────────────────────
@@ -200,21 +207,19 @@ jobs:
       - name: Enforce SonarQube Quality Gate
         if: always()
         run: |
+          ANALYSIS="${{ steps.sonar_analysis.outcome }}"
           GATE="${{ steps.read_gate.outputs.gate_status }}"
+          echo "SonarQube analysis outcome: $ANALYSIS"
           echo "Quality Gate status: $GATE"
-          if [ "${{ steps.sonar_analysis.outcome }}" = "success" ]; then
-            if [ "$GATE" = "OK" ]; then
-              echo "Quality Gate passed!"
-            elif [ "$GATE" = "NONE" ] || [ "$GATE" = "UNKNOWN" ]; then
-              echo "::warning::Quality Gate status is $GATE (first analysis or no data yet). Continuing."
-            else
-              echo "::error::SonarQube Community Quality Gate failed: $GATE"
-              exit 1
-            fi
-          else
-            echo "::warning::SonarQube analysis did not complete successfully (outcome: ${{ steps.sonar_analysis.outcome }}). Skipping gate enforcement."
+          if [ "$ANALYSIS" != "success" ]; then
+            echo "::error::SonarQube analysis failed or did not complete: $ANALYSIS"
+            exit 1
           fi
-
+          if [ "$GATE" != "OK" ]; then
+            echo "::error::SonarQube Community Quality Gate must be OK, got: $GATE"
+            exit 1
+          fi
+          echo "Quality Gate passed!"
       - name: Stop SonarQube
         if: always()
         run: docker compose down sonar-db sonarqube
@@ -222,9 +227,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────
   # ESTRATEGIA 1+2+3+4: CodeBERT SAST condicional
   #
-  # ESTRATEGIA 4 (branch): En dev NUNCA corre. En test corre si
-  #   hay cambios de código. En main corre solo si el gate de
-  #   SonarQube NO es OK (estrategia 2).
+  # ESTRATEGIA 4 (branch): En dev NUNCA corre. En test/PR corre si hay cambios de codigo.
+  # En main corre despues de SonarQube OK y es obligatorio para deploy.
   #
   # ESTRATEGIA 1 (fast-path): Se salta si no hay cambios de código
   #
@@ -233,16 +237,14 @@ jobs:
   # ──────────────────────────────────────────────────────────────
   codebert-sast:
     needs: [build-test, detect-changes, sonarqube]
-    # ESTRATEGIA 1: Solo ejecutar si hay código fuente changed
-    # ESTRATEGIA 4: En dev nunca. En test siempre. En main solo si gate != OK
+    # Dev no ejecuta SAST. Test/PR lo ejecutan solo con cambios de codigo.
+    # Main lo ejecuta siempre despues de SonarQube OK porque bloquea deploy.
     if: |
       always() &&
       needs.build-test.result == 'success' &&
-      needs.detect-changes.outputs.has_code == 'true' &&
       (
-        (github.event_name == 'pull_request') ||
-        (github.ref == 'refs/heads/test') ||
-        (github.ref == 'refs/heads/main' && needs.sonarqube.outputs.gate_status != 'OK' && needs.sonarqube.outputs.gate_status != 'NONE')
+        ((github.event_name == 'pull_request' || github.ref == 'refs/heads/test') && needs.detect-changes.outputs.has_code == 'true') ||
+        (github.ref == 'refs/heads/main' && needs.sonarqube.result == 'success' && needs.sonarqube.outputs.gate_status == 'OK')
       )
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -268,7 +270,7 @@ jobs:
         id: source_hash
         shell: bash
         run: |
-          HASH=$(find backend/src frontend/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \) 2>/dev/null | sort | xargs md5sum 2>/dev/null | md5sum | cut -d' ' -f1)
+          HASH=$(find backend/src frontend-vue/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.vue' -o -name '*.js' -o -name '*.jsx' \) 2>/dev/null | sort | xargs md5sum 2>/dev/null | md5sum | cut -d' ' -f1)
           echo "hash=$HASH" >> "$GITHUB_OUTPUT"
           echo "Source files hash: $HASH"
 
@@ -289,7 +291,7 @@ jobs:
             git diff --name-only "origin/${{ github.base_ref }}...HEAD" > reports/codebert-changed-files-all.txt
             grep -E '\.(c|cc|cpp|cxx|h|hpp|java|js|jsx|py|rs|ts|tsx)$' reports/codebert-changed-files-all.txt | grep -v '^scripts/' > reports/codebert-changed-files.txt || true
           else
-            find backend/src frontend/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files.txt
+            find backend/src frontend/src frontend-vue/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.vue' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files.txt
           fi
           cat reports/codebert-changed-files.txt
 
@@ -388,6 +390,23 @@ jobs:
   # ──────────────────────────────────────────────────────────────
   # Notificaciones (adaptadas a la nueva estructura)
   # ──────────────────────────────────────────────────────────────
+  telegram-notify-main-start:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Telegram main pipeline start
+        continue-on-error: true
+        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            Master Gateway - inicio pipeline main
+
+            Commit: ${{ github.sha }}
+            Autor: ${{ github.actor }}
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
   telegram-notify-dev:
     if: |
       always() &&
@@ -491,16 +510,18 @@ jobs:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
   # ──────────────────────────────────────────────────────────────
-  # Deploy (solo main, requiere sonarqube OK o skip)
+  # Deploy (solo main, requiere SonarQube OK y SAST OK)
   # ──────────────────────────────────────────────────────────────
   deploy:
-    # ESTRATEGIA 4: Solo en main. ESTRATEGIA 2: deploy requiere
-    # sonarqube exitoso O que el gate haya sido OK (ya aprobado)
+    # Solo main. Requiere build/test, SonarQube Quality Gate OK y SAST aprobado.
     if: |
+      always() &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       needs.build-test.result == 'success' &&
-      (needs.sonarqube.result == 'success' || needs.sonarqube.outputs.gate_status == 'OK')
+      needs.sonarqube.result == 'success' &&
+      needs.sonarqube.outputs.gate_status == 'OK' &&
+      needs.codebert-sast.result == 'success'
     needs:
       - build-test
       - detect-changes
@@ -513,7 +534,11 @@ jobs:
 
       - name: Install Render CLI
         run: |
-          curl -fsSL https://raw.githubusercontent.com/render-oss/cli/main/bin/install.sh | sh
+          archive=cli_2.19.0_linux_amd64.zip
+          curl -fsSLO "https://github.com/render-oss/cli/releases/download/v2.19.0/$archive"
+          unzip -oq "$archive"
+          mkdir -p "$HOME/.local/bin"
+          install -m 0755 cli_v2.19.0 "$HOME/.local/bin/render"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Configure Render backend service
@@ -527,7 +552,13 @@ jobs:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
           RENDER_DATABASE_ID: ${{ secrets.RENDER_DATABASE_ID }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          JWE_SECRET: ${{ secrets.JWE_SECRET }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          TEMP_JWT_SECRET: ${{ secrets.TEMP_JWT_SECRET }}
+          REFRESH_JWT_SECRET: ${{ secrets.REFRESH_JWT_SECRET }}
           INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+          OPA_URL: ${{ vars.OPA_URL }}
           SEED_ADMIN_EMAIL: ${{ vars.SEED_ADMIN_EMAIL }}
           SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
         run: bash scripts/configure-render-environment.sh

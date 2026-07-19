@@ -4,13 +4,12 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { RequestWithUser } from './request-with-user';
-import { AuthenticatedUser } from './authenticated-user';
+import { GatewaySessionService } from './gateway-session.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(private readonly gatewaySessionService: GatewaySessionService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
@@ -23,9 +22,7 @@ export class JwtAuthGuard implements CanActivate {
     const token = header.slice('Bearer '.length);
 
     try {
-      request.user = await this.jwtService.verifyAsync<AuthenticatedUser>(
-        token,
-      );
+      request.user = await this.gatewaySessionService.resolveAccessToken(token);
       return true;
     } catch {
       throw new UnauthorizedException('Token invalido o expirado');

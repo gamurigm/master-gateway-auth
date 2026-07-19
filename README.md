@@ -66,6 +66,7 @@ backend/
 frontend/          # SPA Angular
 services/
   ventas/          # Microservicio hijo Zero Trust de ejemplo
+  inventario/      # Microservicio hijo Zero Trust para productos
 docs/              # Documentacion y coleccion HTTP
 ```
 
@@ -77,7 +78,7 @@ docs/              # Documentacion y coleccion HTTP
 - CRUD de usuarios, roles, modulos y menus con soft delete.
 - Arbol de navegacion recursivo (`GET /api/menus/tree`) segun rol.
 - Endpoint interno `POST /api/internals/validate-token` para Zero Trust.
-- Microservicio hijo `ventas` que valida tokens contra el Master.
+- Microservicios hijos `ventas` e `inventario` que validan tokens contra el Master.
 - Auditoria en entidades con `creado_por` y `actualizado_por`.
 - Endpoints protegidos con guards, validacion DTO y rate limiting.
 
@@ -106,12 +107,14 @@ docs/              # Documentacion y coleccion HTTP
 | `GET` | `/api/menus/tree` | Arbol de menus por rol |
 | `POST` | `/api/menus` | Crear menu |
 
-### Microservicio ventas
+### Microservicios hijos
 
 | Metodo | Ruta | Descripcion |
 | --- | --- | --- |
-| `GET` | `http://localhost:3006/health` | Health del hijo |
+| `GET` | `http://localhost:3006/health` | Health de ventas |
 | `GET` | `http://localhost:3006/ventas/ordenes` | Ordenes protegidas por token |
+| `GET` | `http://localhost:3007/health` | Health de inventario |
+| `GET` | `http://localhost:3007/inventario/productos` | Productos protegidos por token |
 
 ## Seed
 
@@ -132,6 +135,7 @@ Credenciales demo:
 npm test
 npm run test:e2e -w backend
 npm run test:ventas
+npm run test -w inventario
 ```
 
 ## CodeBERT SAST dockerizado

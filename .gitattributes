@@ -1,0 +1,7 @@
+# git-crypt: archivos encriptados
+.env filter=git-crypt diff=git-crypt
+.env.local filter=git-crypt diff=git-crypt
+.env.*.local filter=git-crypt diff=git-crypt
+render-secrets.yaml filter=git-crypt diff=git-crypt
+*.pem filter=git-crypt diff=git-crypt
+keys/* filter=git-crypt diff=git-crypt

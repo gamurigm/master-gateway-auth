@@ -31,7 +31,7 @@ export function loadConfig(env = process.env): VentasConfig {
     masterValidateUrl: env['MASTER_VALIDATE_URL'] ?? 'http://localhost:3000/api/internals/validate-token',
     internalApiKey: env['MASTER_INTERNAL_API_KEY'] ?? env['INTERNAL_API_KEY'] ?? 'change-me-internal-key',
     internalServiceName: env['MASTER_INTERNAL_SERVICE_NAME'] ?? 'ventas',
-    allowedRoles: (env['VENTAS_ALLOWED_ROLES'] ?? 'ADMIN,VENTAS')
+    allowedRoles: (env['VENTAS_ALLOWED_ROLES'] ?? 'SUPERADMIN,ADMIN,VENTAS')
       .split(',')
       .map((role) => role.trim())
       .filter(Boolean),
