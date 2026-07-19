@@ -36,11 +36,15 @@ jobs:
               - 'frontend/src/**/*.ts'
               - 'frontend/src/**/*.tsx'
               - 'frontend/src/**/*.html'
+              - 'frontend-vue/src/**/*.ts'
+              - 'frontend-vue/src/**/*.vue'
               - 'services/**/*.ts'
             has_security_relevant:
               - 'backend/src/**/*.ts'
               - 'frontend/src/**/*.ts'
               - 'frontend/src/**/*.tsx'
+              - 'frontend-vue/src/**/*.ts'
+              - 'frontend-vue/src/**/*.vue'
               - 'services/**/*.ts'
               - 'backend/prisma/schema.prisma'
               - 'security/**'
@@ -95,10 +99,7 @@ jobs:
       - name: Inventario tests
         run: npm run test -w inventario
 
-      - name: Frontend type check
-        run: npm run lint -w frontend
-
-      - name: Frontend build
+      - name: Frontend build (Vue)
         run: npm run build:frontend
 
   # ──────────────────────────────────────────────────────────────
@@ -269,7 +270,7 @@ jobs:
         id: source_hash
         shell: bash
         run: |
-          HASH=$(find backend/src frontend/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \) 2>/dev/null | sort | xargs md5sum 2>/dev/null | md5sum | cut -d' ' -f1)
+          HASH=$(find backend/src frontend-vue/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.vue' -o -name '*.js' -o -name '*.jsx' \) 2>/dev/null | sort | xargs md5sum 2>/dev/null | md5sum | cut -d' ' -f1)
           echo "hash=$HASH" >> "$GITHUB_OUTPUT"
           echo "Source files hash: $HASH"
 
@@ -290,7 +291,7 @@ jobs:
             git diff --name-only "origin/${{ github.base_ref }}...HEAD" > reports/codebert-changed-files-all.txt
             grep -E '\.(c|cc|cpp|cxx|h|hpp|java|js|jsx|py|rs|ts|tsx)$' reports/codebert-changed-files-all.txt | grep -v '^scripts/' > reports/codebert-changed-files.txt || true
           else
-            find backend/src frontend/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files.txt
+            find backend/src frontend/src frontend-vue/src services -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.vue' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files.txt
           fi
           cat reports/codebert-changed-files.txt
 

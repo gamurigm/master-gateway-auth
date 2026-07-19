@@ -216,6 +216,20 @@ services:
       retries: 6
       start_period: 10s
 
+  frontend-vue:
+    build:
+      context: frontend-vue
+      dockerfile: Dockerfile
+    container_name: master-gateway-frontend-vue
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      inventario:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_VUE_PORT:-4201}:80"
+
   register-ventas:
     image: node:24.15.0-bookworm-slim
     container_name: master-gateway-register-ventas
@@ -234,7 +248,7 @@ services:
       KONG_ROUTE_PATHS: /ventas,/health
       KONG_WAIT_TIME: 15
     command: ["node", "auto-register-kong.js"]
-    restart: "no"  # Solo se ejecuta una vez
+    restart: "no"
 
   inventario:
     build:
