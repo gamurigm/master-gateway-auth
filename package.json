@@ -35,7 +35,8 @@
         "prisma:validate": "node -e \"process.env.DATABASE_URL ||= 'postgresql://postgres:postgres@localhost:5442/master_gateway?schema=public'; require('node:child_process').execSync('npx prisma validate --schema backend/prisma/schema.prisma', { stdio: 'inherit', env: process.env, shell: true });\"",
         "prisma:generate": "npm run prisma:generate -w backend",
         "prisma:migrate": "npm run prisma:migrate -w backend",
-        "prisma:seed": "npm run prisma:seed -w backend"
+        "prisma:seed": "npm run prisma:seed -w backend",
+        "prisma:seed:sql": "node -e \"const{execFileSync}=require('node:child_process');const url=process.env.DATABASE_URL||'postgresql://postgres:postgres@localhost:5442/master_gateway?schema=public';execFileSync('psql',[url,'-v','ON_ERROR_STOP=1','-f','backend/prisma/seeds/seed.sql'],{stdio:'inherit'});\""
     },
     "devDependencies": {
         "@sonar/scan": "^5.0.0"

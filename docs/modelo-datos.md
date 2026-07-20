@@ -209,13 +209,40 @@ Los endpoints de listado (`GET /api/users`, `GET /api/roles`, etc.) filtran auto
 
 ## Seed inicial
 
-Ejecutar `npm run prisma:seed` crea:
+Hay **dos caminos equivalentes**, que usan exactamente los mismos identificadores
+y convergen al mismo estado. Se pueden ejecutar en cualquier orden y las veces que
+haga falta (ambos son idempotentes).
+
+| Camino | Comando | Cuándo |
+| --- | --- | --- |
+| TypeScript | `npm run prisma:seed` | Desarrollo y arranque en Render. Hashea con Argon2id en tiempo de ejecución |
+| SQL puro | `npm run prisma:seed:sql` | Restauración directa sobre la base, contenedores, `initContainer` de Kubernetes |
+
+El archivo SQL vive en `backend/prisma/seeds/seed.sql` y usa
+`INSERT ... ON CONFLICT DO UPDATE` sobre las claves únicas de cada tabla.
+
+Datos creados:
 
 | Entidad | Valor |
 | --- | --- |
-| Usuario | `admin@example.com` / `Admin12345!` |
-| Rol | `ADMIN` |
-| Módulo | `Administración` (código: `ADMIN`) |
-| Menús raíz | Usuarios, Roles, Módulos, Menús |
+| Usuarios | `admin@example.com` / `Admin12345!`, `demo@example.com` y `ventas@example.com` / `Demo12345!` |
+| Roles | `ADMIN`, `USER`, `VENTAS` |
+| Módulos | `Administración` (`ADMIN`), `Ventas` (`VENTAS`) |
+| Menús | 8 nodos: 2 raíces agrupadoras y 6 hojas con `url` |
 
-El password del seed se hashea con Argon2id en tiempo de ejecución; nunca se almacena en texto plano.
+El password del seed en TypeScript se hashea con Argon2id en tiempo de ejecución.
+El archivo SQL lleva los hashes Argon2id ya precomputados de esas credenciales de
+demo; nunca contiene contraseñas en texto plano. En un despliegue real el
+administrador se crea con `SEED_ADMIN_PASSWORD` desde el entorno.
+
+### Sobre los identificadores
+
+Todos los IDs de demo son **UUID v4 generados aleatoriamente** con
+`crypto.randomUUID()`.
+
+Las generaciones anteriores usaban valores con patrón
+(`11111111-1111-4111-8111-111111111111`, `aaaaaaa1-aaaa-4aaa-8aaa-...`). Eran
+sintácticamente válidos como v4 — se cuidó el nibble de versión `4` y el de
+variante `8` para que `ParseUUIDPipe({ version: '4' })` los aceptara — pero no
+eran aleatorios. Ambos seeds borran esos IDs antiguos al ejecutarse, de modo que
+una base ya sembrada no conserve menús huérfanos.

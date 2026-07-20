@@ -3,8 +3,12 @@ dist/
 coverage/
 .angular/
 .cache/
+# .env contiene los secretos reales inyectados en docker-compose.
+# Solo .env.example (con valores vacios) se versiona.
+.env
 .env.local
 .env.*.local
+!.env.example
 *.log
 tmp/pdfs/
 reports/*.json
