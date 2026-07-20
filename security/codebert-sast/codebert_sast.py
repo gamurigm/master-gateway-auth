@@ -661,6 +661,35 @@ TEST_EXEMPT_RULES = {"SECRET-LITERAL", "SECRET-PLACEHOLDER"}
 # no ahogue el reporte ni el mensaje de Telegram.
 MAX_MATCHES_PER_RULE = 5
 
+# Reglas cuya evidencia contiene el propio secreto. El reporte viaja a artefactos
+# de CI y a un grupo de Telegram, asi que el valor se enmascara: filtrarlo ahi
+# ampliaria la exposicion en lugar de reducirla.
+SECRET_RULES = {"SECRET-LITERAL", "SECRET-PLACEHOLDER", "SECRET-IN-CONFIG"}
+
+SECRET_VALUE_PATTERN = re.compile(
+    r"""(?ix)
+    (?P<key>[A-Za-z0-9_.-]*(password|secret|token|api[_-]?key)[A-Za-z0-9_.-]*)
+    (?P<sep>\s*[:=]\s*)
+    (?P<quote>['"]?)
+    # Se excluyen corchetes/parentesis para no confundir una expresion
+    # (p. ej. `env['API_KEY'] ?? fallback`) con un valor literal.
+    (?P<value>[^'"\s,;\[\]()]{4,})
+    (?P=quote)
+    """
+)
+
+
+def redact_secret(evidence: str) -> str:
+    """Enmascara el valor manteniendo el nombre de la clave y una pista de longitud."""
+
+    def mask(match: re.Match[str]) -> str:
+        value = match.group("value")
+        quote = match.group("quote")
+        hint = f"<REDACTED:{len(value)} chars>"
+        return f"{match.group('key')}{match.group('sep')}{quote}{hint}{quote}"
+
+    return SECRET_VALUE_PATTERN.sub(mask, evidence)
+
 
 def apply_rules(
     code: str,
@@ -684,6 +713,8 @@ def apply_rules(
             if line in seen_lines or is_suppressed(code, line, rule_id):
                 continue
             seen_lines.add(line)
+            if rule_id in SECRET_RULES:
+                evidence = redact_secret(evidence)
             findings.append(RuleFinding(rule_id, severity, message, evidence, line))
             if len(seen_lines) >= MAX_MATCHES_PER_RULE:
                 break

@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - dev
+      - dev-cesar
       - test
       - main
 
@@ -17,6 +18,75 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ──────────────────────────────────────────────────────────────
+  # Notificación de INICIO del pipeline en main.
+  # Exigida explícitamente por el anexo del proyecto ("Inicio del Pipeline
+  # en main"). Va primero y sin needs para que llegue de inmediato.
+  # ──────────────────────────────────────────────────────────────
+  telegram-notify-start:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify pipeline start
+        uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            🚀 *Pipeline iniciado en MAIN - Master Gateway*
+
+            *Autor:* ${{ github.actor }}
+            *Commit:* `${{ github.sha }}`
+
+            Fases: Build y Tests → SonarQube Quality Gate → SAST CodeBERT (CWE / OWASP 2025) → Despliegue en Render.
+
+            Seguimiento:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  # ──────────────────────────────────────────────────────────────
+  # Self-test del agente SAST: valida que las reglas CWE siguen
+  # detectando los fixtures vulnerables y no marcan los seguros.
+  # Solo motor de reglas: no descarga los pesos del modelo (segundos).
+  # ──────────────────────────────────────────────────────────────
+  codebert-selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run SAST agent self-test
+        run: python security/codebert-sast/selftest.py
+
+      - name: Scan vulnerable fixtures (must exit 1)
+        run: |
+          set +e
+          python security/codebert-sast/codebert_sast.py \
+            --rules-only --include-fixtures \
+            --path security/fixtures/vulnerable \
+            --report reports/codebert-fixtures.json \
+            --markdown-report reports/codebert-fixtures.md
+          STATUS=$?
+          set -e
+          if [ "$STATUS" -ne 1 ]; then
+            echo "::error::El agente debia salir con codigo 1 sobre los fixtures vulnerables, salio $STATUS"
+            exit 1
+          fi
+          echo "El agente bloquea correctamente el codigo vulnerable (exit 1)."
+
+      - name: Upload fixture report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codebert-selftest-report
+          path: |
+            reports/codebert-fixtures.json
+            reports/codebert-fixtures.md
+
   # ──────────────────────────────────────────────────────────────
   # ESTRATEGIA 1: Detectar si hay cambios en código fuente
   # Permite fast-path para commits de docs/config
@@ -251,7 +321,9 @@ jobs:
     timeout-minutes: 35
     env:
       CODEBERT_MODEL: mahdin70/CodeBERT-PrimeVul-BigVul
-      CODEBERT_THRESHOLD: "0.999"
+      # 0.85 es el umbral documentado en docs/ci-cd.md. El valor anterior (0.999)
+      # dejaba la mitad ML del agente practicamente inerte.
+      CODEBERT_THRESHOLD: "0.85"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -312,7 +384,8 @@ jobs:
             -e CODEBERT_THRESHOLD="$CODEBERT_THRESHOLD" \
             master-gateway-codebert-sast \
             --changed-files reports/codebert-changed-files.txt \
-            --report reports/codebert-sast.json
+            --report reports/codebert-sast.json \
+            --markdown-report reports/codebert-sast.md
 
       # Guardar resultado en cache para futuras ejecuciones con mismo hash
       - name: Cache SAST result
@@ -337,6 +410,7 @@ jobs:
           name: codebert-sast-report
           path: |
             reports/codebert-sast.json
+            reports/codebert-sast.md
             reports/codebert-changed-files.txt
 
       - name: Parse SAST Report for Telegram
@@ -350,14 +424,44 @@ jobs:
           } >> "$GITHUB_ENV"
 
           if [ -f reports/codebert-sast.json ]; then
-            VULN_DETAILS=$(jq -r '.files[] | select(.status == "VULNERABLE") | "- Archivo: \(.path)\n  Reglas:\n\(.rules[] | "    * \(.rule_id) (\(.severity)): \(.message)")\n"' reports/codebert-sast.json | head -c 3000)
+            # Resumen agregado: cuántos hallazgos, qué CWE y qué categorías OWASP 2025.
+            SAST_SUMMARY=$(jq -r '
+              .summary as $s
+              | "Hallazgos: \($s.total_findings // 0) en \($s.vulnerable_files // 0) archivo(s)"
+                + "\nCriticos: \($s.by_severity.CRITICAL // 0) | Advertencias: \($s.by_severity.WARNING // 0)"
+                + "\nCWE: \(($s.by_cwe // {}) | keys | join(", "))"
+                + "\nOWASP \(.owasp_version // "2025"): \(($s.by_owasp_2025 // {}) | keys | join(", "))"
+            ' reports/codebert-sast.json)
+
+            # Detalle por hallazgo, con CWE, categoría OWASP, ubicación y CVEs.
+            VULN_DETAILS=$(jq -r '
+              .files[]
+              | select(.status == "VULNERABLE")
+              | . as $file
+              | "ARCHIVO: \($file.path)  (prob. ML \($file.insecure_probability))",
+                ( $file.rules[]
+                  | "  [\(.severity)] \(.cwe_id) - \(.cwe_name)"
+                    + "\n    Regla:     \(.rule_id)"
+                    + "\n    OWASP:     \(.owasp_2025)"
+                    + "\n    Ubicacion: \($file.path):\(.line)"
+                    + "\n    Evidencia: \(.evidence)"
+                    + "\n    CVEs ref.: \((.reference_cves // []) | if length == 0 then "-" else join(", ") end)"
+                    + "\n    Remediar:  \(.remediation)"
+                ),
+                ""
+            ' reports/codebert-sast.json | head -c 3000)
+
             if [ -z "$VULN_DETAILS" ]; then
               VULN_DETAILS="No se pudo extraer el detalle de las vulnerabilidades."
             fi
           else
+            SAST_SUMMARY="Reporte JSON no encontrado."
             VULN_DETAILS="Reporte JSON no encontrado."
           fi
           {
+            echo "SAST_SUMMARY<<EOF"
+            echo "$SAST_SUMMARY"
+            echo "EOF"
             echo "VULN_DETAILS<<EOF"
             echo "$VULN_DETAILS"
             echo "EOF"
@@ -380,7 +484,12 @@ jobs:
             *Commit:* ${{ github.sha }}
             *Mensaje:* ${{ env.COMMIT_MSG }}
 
-            *Vulnerabilidades Detectadas:*
+            *Resumen:*
+            ```
+            ${{ env.SAST_SUMMARY }}
+            ```
+
+            *Detalle (CWE / OWASP Top 10 : 2025):*
             ```
             ${{ env.VULN_DETAILS }}
             ```
