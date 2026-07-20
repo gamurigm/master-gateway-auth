@@ -138,3 +138,62 @@ posterior y no se presentan aquí como completadas:
    rutas administrativas base y enlaces del sidebar escritos en código
    (`app-route-children.ts` y `shell.component.ts`). Esto no cumple literalmente
    la prohibición de rutas hardcodeadas.
+
+## Segunda auditoría — rama `dev-cesar` (2026-07-20)
+
+### Secretos versionados en `docker-compose.yml`
+
+El propio agente SAST, tras extenderse a ficheros de configuración con la regla
+`SECRET-IN-CONFIG` (CWE-798 / OWASP 2025 A07), detectó **cinco credenciales en
+texto plano** en `docker-compose.yml`: `JWT_SECRET`, `JWE_SECRET`,
+`TEMP_JWT_SECRET`, `REFRESH_JWT_SECRET` e `INTERNAL_API_KEY`, más
+`SEED_ADMIN_PASSWORD`.
+
+Ninguna regla anterior podía verlas por dos motivos: `.yml` no estaba en las
+extensiones escaneadas, y los valores no eran placeholders `change-me-*`, de modo
+que la regla `SECRET-PLACEHOLDER` tampoco aplicaba. Contradice directamente el
+requisito del PDF de que queda "totalmente prohibido el hardcodeo de secrets".
+
+**Corrección:** todos los valores pasan a indirección `${VAR:?mensaje}` leída
+desde `.env` (ignorado por git). Se usa la forma `:?` en lugar de un valor por
+defecto para que la ausencia de la variable impida arrancar el contenedor, en vez
+de levantarlo con una clave conocida.
+
+> [!WARNING]
+> Los valores anteriores permanecen en el historial de git. Deben considerarse
+> comprometidos y **rotarse**, no solo eliminarse del árbol de trabajo. Esta
+> acción requiere intervención manual y queda pendiente.
+
+### Autorización interna con guarda condicional
+
+`auth.service.ts` comprobaba la API key interna como `if (expectedKey && apiKey
+!== expectedKey)`. Con `INTERNAL_API_KEY` vacía o ausente, la condición era falsa
+y **cualquier petición a `/api/internals/validate-token` pasaba la comprobación**.
+`env.validation.ts` exige la variable, así que no era explotable en una
+configuración válida, pero anulaba la defensa en profundidad.
+
+**Corrección:** la comprobación pasa a `if (!expectedKey || apiKey !==
+expectedKey)`, con una prueba de regresión que verifica el rechazo cuando la
+variable no está definida.
+
+### Validación de UUID inconsistente
+
+`GET /api/roles/:id` era el único parámetro de ruta sin
+`ParseUUIDPipe({ version: '4' })`. Corregido para alinearlo con el resto.
+
+### CVEs de dependencias (OWASP 2025 A03 — Software Supply Chain Failures)
+
+Los CVEs de Multer y Lodash citados en la primera auditoría ya no aparecen. El
+estado actual pasó de 14 a 11 hallazgos:
+
+| Acción | Efecto |
+| --- | --- |
+| `npm audit fix` | 14 → 13 |
+| `@sonar/scan` 4 → 5 (major, herramienta de desarrollo) | 13 → 11, resuelve `adm-zip` y `@sonar/scan` (high) |
+
+Las 11 restantes son **exclusivamente dependencias de desarrollo** y no llegan al
+artefacto desplegado: `@angular-devkit/*`, `@angular/build`, `@babel/core`,
+`@nestjs/cli`, `ajv`, `esbuild`, `glob`, `picomatch` y `webpack`. La mayoría
+proviene del workspace `frontend` (Angular legado, ya sustituido por
+`frontend-vue`), por lo que se resolverán al retirarlo. Resolverlas ahora exigiría
+saltos de versión mayor en la toolchain, con más riesgo que beneficio.

@@ -255,6 +255,20 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
+  it('validateInternal rejects every request when INTERNAL_API_KEY is missing', async () => {
+    // Regresion: la comprobacion antigua era `if (expectedKey && ...)`, de modo
+    // que sin INTERNAL_API_KEY configurada cualquier peticion interna pasaba.
+    delete process.env['INTERNAL_API_KEY'];
+
+    await expect(
+      service.validateInternal(undefined, 'token', 'ventas'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    await expect(
+      service.validateInternal('cualquier-cosa', 'token', 'ventas'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('validateInternal rejects internal services outside the allowlist', async () => {
     process.env['INTERNAL_ALLOWED_SERVICES'] = 'ventas';
     await expect(

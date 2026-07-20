@@ -272,8 +272,11 @@ export class AuthService {
     token: string,
     serviceName: string | undefined,
   ) {
+    // La comprobacion es incondicional: si INTERNAL_API_KEY faltara, el guard
+    // anterior (`expectedKey && ...`) dejaba pasar cualquier peticion interna.
+    // env.validation ya exige la variable, pero esto es defensa en profundidad.
     const expectedKey = process.env['INTERNAL_API_KEY'];
-    if (expectedKey && apiKey !== expectedKey) {
+    if (!expectedKey || apiKey !== expectedKey) {
       this.logger.warn(
         JSON.stringify({
           event: 'auth.internal_validate.denied',

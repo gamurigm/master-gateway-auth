@@ -116,17 +116,20 @@ services:
       FRONTEND_ORIGIN: http://localhost:4200
       JWT_ISSUER: master-gateway
       JWT_AUDIENCE: master-gateway-clients
-      JWT_SECRET: 7xKpLmNqRsTvWzY2A4C6E8G0JbDfHjMw
-      JWE_SECRET: ZnDwNgatMrdmOf3GeviysWbVJLTI2qFc
+      # Los secretos se inyectan desde .env (ignorado por git). Sin valor por
+      # defecto a proposito: si falta la variable, el contenedor no arranca en
+      # lugar de levantar con una clave conocida. Ver .env.example.
+      JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET en .env}
+      JWE_SECRET: ${JWE_SECRET:?falta JWE_SECRET en .env}
       JWT_EXPIRES_IN: 15m
-      TEMP_JWT_SECRET: RvYz3B5D7F9H1J3L5N7P9R0T2V4W6X8Z
+      TEMP_JWT_SECRET: ${TEMP_JWT_SECRET:?falta TEMP_JWT_SECRET en .env}
       TEMP_JWT_EXPIRES_IN: 5m
-      REFRESH_JWT_SECRET: aBcDeFgHiJkLmNoPqRsTuVwXyZ0_2=4+6-8
+      REFRESH_JWT_SECRET: ${REFRESH_JWT_SECRET:?falta REFRESH_JWT_SECRET en .env}
       REFRESH_JWT_EXPIRES_IN: 7d
-      INTERNAL_API_KEY: GRLBr1NlXycv635hnQ2ZdxaT9uSHb7VpjFtso4Dk
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?falta INTERNAL_API_KEY en .env}
       INTERNAL_ALLOWED_SERVICES: ventas
-      SEED_ADMIN_EMAIL: admin@example.com
-      SEED_ADMIN_PASSWORD: Admin12345!
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@example.com}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?falta SEED_ADMIN_PASSWORD en .env}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
     healthcheck:
@@ -192,7 +195,9 @@ services:
     environment:
       VENTAS_PORT: 3006
       MASTER_VALIDATE_URL: http://backend:3000/api/internals/validate-token
-      MASTER_INTERNAL_API_KEY: GRLBr1NlXycv635hnQ2ZdxaT9uSHb7VpjFtso4Dk
+      # Debe coincidir con INTERNAL_API_KEY del backend: es la misma credencial
+      # compartida que autentica al microservicio hijo contra el Master.
+      MASTER_INTERNAL_API_KEY: ${INTERNAL_API_KEY:?falta INTERNAL_API_KEY en .env}
       MASTER_INTERNAL_SERVICE_NAME: ventas
       VENTAS_ALLOWED_ROLES: ADMIN,VENTAS
       MASTER_VALIDATE_RETRY_ATTEMPTS: 3

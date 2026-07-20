@@ -38,6 +38,6 @@
         "prisma:seed": "npm run prisma:seed -w backend"
     },
     "devDependencies": {
-        "@sonar/scan": "^4.3.8"
+        "@sonar/scan": "^5.0.0"
     }
 }
