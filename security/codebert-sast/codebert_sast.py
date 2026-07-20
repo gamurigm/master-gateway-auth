@@ -88,8 +88,13 @@ CRITICAL_RULES: list[tuple[str, re.Pattern[str], str]] = [
     ),
     (
         "TS-SHELL",
+        # `exec`/`execSync` de child_process, o su forma importada suelta.
+        # La negacion (?<![.\w]) evita el falso positivo mas comun: el metodo
+        # RegExp.prototype.exec (`/patron/.exec(x)`), que no es ejecucion de shell.
         re.compile(
-            r"\b(child_process\.)?(exec|execSync)\s*\(|shell\s*:\s*true",
+            r"child_process\.(exec|execSync|spawn|spawnSync)\s*\("
+            r"|(?<![.\w])(exec|execSync)\s*\(\s*[`'\"]"
+            r"|shell\s*:\s*true",
             re.IGNORECASE,
         ),
         "Shell execution pattern detected.",
