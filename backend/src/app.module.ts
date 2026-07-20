@@ -9,6 +9,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { RequestLoggingMiddleware } from './common/observability/request-logging.middleware';
 import { validateEnv } from './config/env.validation';
+import { ExternalServicesModule } from './external-services/external-services.module';
 import { MenusModule } from './menus/menus.module';
 import { ModulesModule } from './modules/modules.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -34,6 +35,7 @@ import { UsersModule } from './users/users.module';
     RolesModule,
     ModulesModule,
     MenusModule,
+    ExternalServicesModule,
   ],
   controllers: [AppController],
   providers: [

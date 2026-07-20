@@ -74,8 +74,40 @@ model SystemModule {
   updatedBy   String?      @map("actualizado_por") @db.Uuid
   menus       Menu[]
   roles       RoleModule[]
+  services    ExternalService[]
 
   @@map("modulos")
+}
+
+/// Microservicio externo registrado en el Master.
+///
+/// Permite dar de alta un servicio hijo (su URL base y su endpoint de salud),
+/// comprobar que responde ANTES de crearle modulo y menus, y despues generar
+/// esa navegacion automaticamente. Es lo que hace que el ecosistema sea
+/// extensible sin tocar codigo del frontend ni del backend.
+model ExternalService {
+  id          String        @id @default(uuid()) @db.Uuid
+  code        String        @unique @map("codigo")
+  name        String        @map("nombre")
+  description String?       @map("descripcion")
+  baseUrl     String        @map("base_url")
+  healthPath  String        @default("/health") @map("health_path")
+  openApiPath String?       @map("openapi_path")
+  /// Resultado de la ultima comprobacion de disponibilidad.
+  lastProbeAt DateTime?     @map("ultima_verificacion")
+  lastProbeOk Boolean?      @map("ultima_verificacion_ok")
+  lastProbeMs Int?          @map("ultima_verificacion_ms")
+  /// Modulo generado por `provision`. Null mientras el servicio no se haya aprovisionado.
+  moduleId    String?       @map("modulo_id") @db.Uuid
+  estado      Estado        @default(ACTIVO)
+  createdAt   DateTime      @default(now()) @map("fecha_creacion")
+  updatedAt   DateTime      @updatedAt @map("fecha_actualizacion")
+  createdBy   String?       @map("creado_por") @db.Uuid
+  updatedBy   String?       @map("actualizado_por") @db.Uuid
+  module      SystemModule? @relation(fields: [moduleId], references: [id])
+
+  @@index([moduleId])
+  @@map("servicios_externos")
 }
 
 model RoleModule {
