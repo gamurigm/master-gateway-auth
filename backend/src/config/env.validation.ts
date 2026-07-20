@@ -1,3 +1,6 @@
+// Los centinelas `change-me-*` de este objeto son deliberados: este mismo archivo
+// los RECHAZA cuando NODE_ENV=production, de modo que un despliegue sin secretos
+// reales falla al arrancar. Son el mecanismo de defensa, no la vulnerabilidad.
 const DEVELOPMENT_DEFAULTS: Record<string, string> = {
   DATABASE_URL:
     'postgresql://postgres:postgres@localhost:5442/master_gateway?schema=public',
@@ -7,7 +10,9 @@ const DEVELOPMENT_DEFAULTS: Record<string, string> = {
   JWT_AUDIENCE: 'master-gateway-clients',
   JWT_PRIVATE_KEY_PATH: './keys/private.pem',
   JWT_PUBLIC_KEY_PATH: './keys/public.pem',
+  // sast-ignore: SECRET-PLACEHOLDER centinela rechazado en produccion (ver validateEnv, linea 43)
   JWE_SECRET: 'change-me-jwe-secret-32-bytes!!!',
+  // sast-ignore: SECRET-PLACEHOLDER centinela rechazado en produccion (ver validateEnv, linea 43)
   INTERNAL_API_KEY: 'change-me-internal-key',
   INTERNAL_ALLOWED_SERVICES: 'ventas',
 };

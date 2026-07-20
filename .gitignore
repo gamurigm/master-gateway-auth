@@ -8,7 +8,8 @@ coverage/
 *.log
 tmp/pdfs/
 reports/*.json
+reports/*.md
 reports/codebert-changed-files.txt
 .cache/huggingface/
 __pycache__/
-
+.claude
