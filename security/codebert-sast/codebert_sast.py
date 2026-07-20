@@ -12,13 +12,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-import numpy as np
-
 from cwe_catalog import OWASP_VERSION, enrich
 
-# torch y transformers se importan de forma perezosa dentro de load_model /
-# predict_insecure_probability: pesan ~2 GB y el motor de reglas (que es lo que
-# ejercita selftest.py) no los necesita.
+# numpy, torch y transformers se importan de forma perezosa dentro de las
+# funciones de la ruta ML. El motor de reglas CWE (que es lo que ejercita
+# selftest.py y el modo --rules-only) no depende de ninguno de los tres, de modo
+# que puede correr con un Python limpio, sin `pip install` y sin descargar los
+# ~2 GB de pesos del modelo.
 
 
 DEFAULT_MODEL = "mrm8488/codebert-base-finetuned-detect-insecure-code"
@@ -514,6 +514,8 @@ def analyze_file(
     threshold: float,
     max_chars: int,
 ) -> FileFinding:
+    import numpy as np
+
     code = path.read_text(encoding="utf-8", errors="replace")
     chunks = split_code(code, max_chars)
     probabilities = [
@@ -606,6 +608,7 @@ def split_code(code: str, max_chars: int) -> list[str]:
 
 
 def predict_insecure_probability(code: str, tokenizer, model, model_type: str) -> float:
+    import numpy as np
     import torch
 
     encoded = tokenizer(
@@ -633,7 +636,9 @@ def predict_insecure_probability(code: str, tokenizer, model, model_type: str) -
     return float(probabilities[insecure_index])
 
 
-def softmax(logits: np.ndarray) -> np.ndarray:
+def softmax(logits: "np.ndarray") -> "np.ndarray":
+    import numpy as np
+
     shifted = logits - np.max(logits)
     exp = np.exp(shifted)
     return exp / exp.sum()

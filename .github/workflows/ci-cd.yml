@@ -305,16 +305,20 @@ jobs:
   #   fuente no cambió desde la última ejecución exitosa
   # ──────────────────────────────────────────────────────────────
   codebert-sast:
-    needs: [build-test, detect-changes, sonarqube]
+    needs: [build-test, detect-changes, sonarqube, codebert-selftest]
     # ESTRATEGIA 1: Solo ejecutar si hay código fuente changed
-    # ESTRATEGIA 4: En dev nunca. En test siempre. En main solo si gate != OK
+    # ESTRATEGIA 4: En dev nunca. En test y dev-cesar siempre. En main solo si el gate pasó.
+    # El self-test debe pasar primero: si el agente no detecta sus propios
+    # fixtures vulnerables, su veredicto sobre el código real no vale nada.
     if: |
       always() &&
       needs.build-test.result == 'success' &&
+      needs.codebert-selftest.result == 'success' &&
       needs.detect-changes.outputs.has_security_relevant == 'true' &&
       (
         (github.event_name == 'pull_request') ||
         (github.ref == 'refs/heads/test') ||
+        (github.ref == 'refs/heads/dev-cesar') ||
         (github.ref == 'refs/heads/main' && needs.sonarqube.result == 'success' && needs.sonarqube.outputs.gate_status == 'OK')
       )
     runs-on: ubuntu-latest
@@ -503,11 +507,14 @@ jobs:
   telegram-notify-dev:
     if: |
       always() &&
-      github.event_name == 'push' && github.ref == 'refs/heads/dev' &&
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/dev-cesar') &&
       needs.build-test.result != 'cancelled'
     needs:
       - build-test
       - detect-changes
+      - codebert-selftest
+      - codebert-sast
     runs-on: ubuntu-latest
     steps:
       - name: Notify Telegram
@@ -516,9 +523,11 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            Master Gateway - push a dev (fast-path)
+            Master Gateway - push a ${{ github.ref_name }} (fast-path)
 
             Build/Test: ${{ needs.build-test.result }}
+            Self-test del agente SAST: ${{ needs.codebert-selftest.result }}
+            SAST CodeBERT (CWE/OWASP 2025): ${{ needs.codebert-sast.result }}
             Código detectado: ${{ needs.detect-changes.outputs.has_code }}
             Commit: ${{ github.sha }}
             Autor: ${{ github.actor }}
@@ -607,7 +616,10 @@ jobs:
   # ──────────────────────────────────────────────────────────────
   deploy:
     # ESTRATEGIA 4: Solo en main. ESTRATEGIA 2: deploy requiere
-    # sonarqube exitoso O que el gate haya sido OK (ya aprobado)
+    # sonarqube exitoso O que el gate haya sido OK (ya aprobado).
+    # codebert-selftest se exige explicitamente: si falla, codebert-sast queda
+    # 'skipped' y sin esta condicion un commit sin cambios de seguridad podria
+    # desplegarse con el agente SAST averiado.
     if: |
       always() &&
       github.event_name == 'push' &&
@@ -615,6 +627,7 @@ jobs:
       needs.build-test.result == 'success' &&
       needs.sonarqube.result == 'success' &&
       needs.sonarqube.outputs.gate_status == 'OK' &&
+      needs.codebert-selftest.result == 'success' &&
       (
         needs.codebert-sast.result == 'success' ||
         (needs.detect-changes.outputs.has_security_relevant != 'true' && needs.codebert-sast.result == 'skipped')
@@ -624,6 +637,7 @@ jobs:
       - detect-changes
       - sonarqube
       - codebert-sast
+      - codebert-selftest
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
