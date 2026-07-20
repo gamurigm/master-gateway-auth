@@ -181,3 +181,9 @@ Si quieres usar el SonarQube que ya existe en WSL en `9090`, cambia `SONAR_HOST_
 
 UNLICENSED - Proyecto academico ESPE.
 
+## Integrantes
+
+-   **Camilo Orrico** 
+-   **Cesar Loor**
+-   **Gabriel Murrillo**
+
