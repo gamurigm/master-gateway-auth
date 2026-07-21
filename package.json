@@ -28,7 +28,7 @@
         "test:backend": "npm run test -w backend",
         "test:ventas": "npm run test -w ventas",
         "test:coverage": "npm run test:cov -w backend -- --runInBand",
-        "sonar:scan": "sonar-scanner",
+        "sonar:scan": "sonar-scanner-npm",
         "sast:selftest": "python security/codebert-sast/selftest.py",
         "sast:rules": "python security/codebert-sast/codebert_sast.py --rules-only",
         "sast:fixtures": "python security/codebert-sast/codebert_sast.py --rules-only --include-fixtures --path security/fixtures/vulnerable --report reports/codebert-fixtures.json --markdown-report reports/codebert-fixtures.md",
