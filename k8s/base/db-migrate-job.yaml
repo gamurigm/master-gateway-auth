@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  labels:
+    app: db-migrate
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: db-migrate
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      # initContainer: no arrancar migraciones hasta que Postgres acepte conexiones.
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres -U postgres -d master_gateway; do
+                echo "esperando a postgres..."; sleep 2;
+              done
+      containers:
+        - name: migrate-and-seed
+          image: master-gateway-backend:dev
+          imagePullPolicy: IfNotPresent
+          # migrate deploy + seed se ejecutan UNA vez aquí, no en cada pod del
+          # Deployment: con varias réplicas, todas sembrarían a la vez y
+          # competirían. El Deployment sólo arranca main.js.
+          command:
+            - sh
+            - -c
+            - >
+              npx prisma migrate deploy --schema backend/prisma/schema.prisma &&
+              node backend/dist/prisma/seed.js
+          envFrom:
+            - configMapRef:
+                name: master-gateway-config
+            - secretRef:
+                name: master-gateway-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi

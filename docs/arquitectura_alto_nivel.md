@@ -1,61 +1,166 @@
 # Arquitectura de Alto Nivel: Master Gateway
 
-A continuación se presenta un diagrama visual de cómo interactúan las distintas piezas del proyecto actualmente, basándose en la arquitectura Zero Trust y la centralización de seguridad.
+Vista de cómo interactúan las piezas del proyecto: la SPA, el Master de
+autenticación/autorización, la base de datos, los microservicios hijos Zero
+Trust y el plano DevSecOps (CI/CD).
+
+## Diagrama de componentes
 
 ```mermaid
 flowchart TD
-    %% Definición de estilos
-    classDef frontend fill:#dd2c00,stroke:#333,stroke-width:2px,color:#fff
+    classDef frontend fill:#42b883,stroke:#333,stroke-width:2px,color:#fff
     classDef backend fill:#e0234e,stroke:#333,stroke-width:2px,color:#fff
     classDef database fill:#336791,stroke:#333,stroke-width:2px,color:#fff
     classDef microservice fill:#00875a,stroke:#333,stroke-width:2px,color:#fff
+    classDef devsecops fill:#5c6bc0,stroke:#333,stroke-width:2px,color:#fff
     classDef user fill:#f9a826,stroke:#333,stroke-width:2px,color:#000
 
-    %% Nodos
     User(["👤 Usuario / Navegador"]):::user
 
-    subgraph "Frontend (Angular SPA)"
-        Login["Pantalla Login"]:::frontend
-        RoleSelector["Selector de Rol / Workspace"]:::frontend
-        Dashboard["Dashboard Dinámico (Rutas Generadas)"]:::frontend
+    subgraph SPA["Frontend — Vue 3 SPA (nginx)"]
+        Login["Login"]:::frontend
+        RoleSel["Selector de Rol (Workspace)"]:::frontend
+        Shell["Shell + Sidebar<br/>rutas inyectadas en runtime"]:::frontend
     end
 
-    subgraph "Backend: Master Gateway (NestJS)"
-        AuthService["Módulo de Autenticación<br/>🔐 Emite TempToken y JWT Final"]:::backend
-        MenuService["Módulo de Menús<br/>🌳 Genera Árbol Recursivo"]:::backend
-        ValidationService["Endpoint Interno<br/>🛡️ Valida Tokens (Zero Trust)"]:::backend
+    subgraph Master["Master Gateway — NestJS + Prisma"]
+        Auth["Auth<br/>🔐 tempToken RS256 + accessToken JWE"]:::backend
+        Menus["Menús<br/>🌳 árbol en memoria (sin N+1)"]:::backend
+        ExtSvc["Servicios externos<br/>🔌 probe anti-SSRF + provisión"]:::backend
+        Internal["Endpoint interno<br/>🛡️ valida tokens (Zero Trust)"]:::backend
     end
 
-    subgraph "Capa de Datos"
-        DB[("PostgreSQL<br/>💾 Users, Roles, Menús,<br/>Tokens, Auditoría")]:::database
+    subgraph Data["Capa de datos"]
+        DB[("PostgreSQL<br/>💾 usuarios, roles, módulos,<br/>menús, servicios_externos,<br/>refresh_tokens, auditoría")]:::database
     end
 
-    subgraph "Microservicios Hijos (Negocio)"
-        VentasService["Microservicio: Ventas<br/>📦 (No tiene base de usuarios)"]:::microservice
+    subgraph Children["Microservicios hijos (negocio)"]
+        Ventas["Ventas<br/>📦 sin base de usuarios"]:::microservice
+        Otros["Servicios registrados<br/>dinámicamente"]:::microservice
     end
 
-    %% Relaciones y Flujo
-    User -->|1. Ingresa Credenciales| Login
-    Login -->|Llama API| AuthService
-    AuthService -.->|Retorna TempToken y Roles| RoleSelector
+    subgraph DevSecOps["Plano DevSecOps — GitHub Actions"]
+        Sonar["SonarQube<br/>Quality Gate"]:::devsecops
+        CodeBERT["CodeBERT SAST<br/>CWE + OWASP 2025"]:::devsecops
+        Render["Render<br/>deploy por CLI"]:::devsecops
+        TG["Telegram<br/>notificaciones"]:::devsecops
+    end
 
-    RoleSelector -->|2. Usuario elige Rol| AuthService
-    AuthService -.->|Retorna JWT Definitivo| Dashboard
+    User -->|1. Credenciales| Login
+    Login -->|POST /auth/login| Auth
+    Auth -.->|tempToken + roles| RoleSel
+    RoleSel -->|2. POST /auth/select-role| Auth
+    Auth -.->|accessToken JWE| Shell
+    Shell -->|3. GET /menus/tree| Menus
+    Menus -.->|árbol JSON → router.addRoute| Shell
+    Shell -->|CRUD + probe/provision| ExtSvc
 
-    Dashboard -->|3. Solicita Navegación| MenuService
-    MenuService -.->|Devuelve JSON del Menú| Dashboard
+    Auth <--> DB
+    Menus <--> DB
+    ExtSvc <--> DB
+    Internal <--> DB
 
-    AuthService <-->|Lee/Escribe estado| DB
-    MenuService <-->|Consultas CTE Recursivas| DB
-    ValidationService <-->|Verifica sesiones| DB
+    Shell -->|4. petición de negocio + token| Ventas
+    Ventas -.->|5. valida token| Internal
+    ExtSvc -.->|probe /health| Otros
+    Otros -.->|valida token| Internal
 
-    Dashboard -->|4. Petición de negocio con JWT| VentasService
-    VentasService -.->|5. Delega validación de acceso| ValidationService
+    Sonar --> CodeBERT --> Render
+    Sonar -.-> TG
+    CodeBERT -.-> TG
+    Render -.-> TG
+    Render -.->|despliega| Master
 ```
 
-### Explicación del Flujo:
+### Flujo resumido
 
-1. **Autenticación en Dos Pasos**: El usuario ingresa al **Login**, el backend valida sus credenciales y emite un *TempToken* (solo válido para el siguiente paso).
-2. **Aislamiento de Sesión**: Obligatoriamente, el usuario pasa al **Selector de Rol**. Una vez elige el rol con el que va a trabajar (ej. Administrador), el sistema le otorga el **JWT Definitivo** que contiene *únicamente* los permisos de ese rol elegido.
-3. **Frontend Dinámico**: Con el JWT definitivo, el Angular SPA solicita la estructura de menús. El backend lee la base de datos de manera recursiva y le devuelve un JSON con el menú (Sidebar) que le corresponde, construyendo las rutas en ese instante (no hay rutas _hardcodeadas_).
-4. **Zero Trust en Acción**: Cuando el usuario intenta acceder a un recurso de negocio (como el **Microservicio de Ventas**), el SPA envía el JWT. El microservicio de ventas *no confía* en el SPA ni tiene base de datos de usuarios; en su lugar, pregunta inmediatamente al Master Gateway (`ValidationService`) si ese token es válido y si tiene permisos para entrar. Si la respuesta es afirmativa, le entrega los datos al usuario.
+1. **Autenticación en dos pasos.** Login valida credenciales (argon2id) y emite
+   un `tempToken` de corta vida.
+2. **Aislamiento de sesión.** El usuario elige rol en el selector; el sistema
+   emite un `accessToken` **JWE cifrado** con *sólo* los permisos de ese rol
+   (menor privilegio).
+3. **Frontend dinámico.** Con el token, la SPA pide el árbol de menús y construye
+   las rutas en tiempo de ejecución (`router.addRoute`) — sin rutas hardcodeadas.
+4. **Zero Trust.** Los microservicios hijos no confían en el frontend: validan
+   cada token contra el endpoint interno del Master (API key + allowlist).
+5. **Extensibilidad.** Nuevos servicios se registran desde la UI: se prueba su
+   `/health` (con defensa anti-SSRF) antes de generarles módulo y menús.
+6. **DevSecOps.** Cada cambio pasa por build, Quality Gate de SonarQube y SAST
+   CodeBERT (con mapeo CWE/OWASP 2025) antes de desplegar por CLI, con Telegram
+   notificando cada hito.
+
+## Modelo de datos (entidad-relación)
+
+Todas las entidades comparten el patrón de auditoría (`id` UUID v4, `estado`,
+`fecha_creacion`, `fecha_actualizacion`, `creado_por`, `actualizado_por`) y usan
+soft delete. Los menús son una lista de adyacencia (`parent_id` a sí misma).
+
+```mermaid
+erDiagram
+    usuarios ||--o{ usuario_roles : tiene
+    roles ||--o{ usuario_roles : agrupa
+    roles ||--o{ rol_modulos : accede
+    modulos ||--o{ rol_modulos : asignado
+    roles ||--o{ rol_menus : ve
+    menus ||--o{ rol_menus : asignado
+    modulos ||--o{ menus : contiene
+    menus ||--o{ menus : parent_id
+    modulos ||--o| servicios_externos : generado_por
+    usuarios ||--o{ refresh_tokens : posee
+    roles ||--o{ refresh_tokens : contexto
+
+    usuarios {
+        uuid id PK
+        string email UK
+        string password_hash "argon2id"
+        enum estado
+    }
+    roles {
+        uuid id PK
+        string nombre UK
+        enum estado
+    }
+    usuario_roles {
+        uuid id PK
+        uuid usuario_id FK
+        uuid rol_id FK
+    }
+    modulos {
+        uuid id PK
+        string codigo UK
+        string nombre
+    }
+    rol_modulos {
+        uuid id PK
+        uuid rol_id FK
+        uuid modulo_id FK
+    }
+    menus {
+        uuid id PK
+        string nombre
+        string url "solo en hojas"
+        uuid modulo_id FK
+        uuid parent_id FK "adjacency list"
+    }
+    rol_menus {
+        uuid id PK
+        uuid rol_id FK
+        uuid menu_id FK
+    }
+    servicios_externos {
+        uuid id PK
+        string codigo UK
+        string base_url
+        string health_path
+        uuid modulo_id FK
+    }
+    refresh_tokens {
+        uuid id PK
+        uuid usuario_id FK
+        string jti UK
+        boolean reutilizacion_detectada
+    }
+```
+
+Los diagramas de secuencia de cada flujo están en
+[`docs/diagramas-secuencia.md`](./diagramas-secuencia.md).

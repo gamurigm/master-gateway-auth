@@ -1,0 +1,28 @@
+# Autoescalado horizontal del Master. Requiere metrics-server en el cluster.
+# El escalado sólo es correcto porque todas las réplicas firman con el mismo par
+# de claves RSA (Secret master-gateway-keys); si cada pod generara el suyo, los
+# tokens fallarían de forma intermitente al balancearse entre pods.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

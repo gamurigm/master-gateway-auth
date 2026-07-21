@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: master-gateway-config
+data:
+  # Configuración NO sensible. Los secretos van en el Secret aparte.
+  NODE_ENV: "production"
+  PORT: "3000"
+  # El frontend (nginx) proxya /api hacia el Service "backend".
+  FRONTEND_ORIGIN: "http://localhost"
+  JWT_ISSUER: "master-gateway"
+  JWT_AUDIENCE: "master-gateway-clients"
+  JWT_EXPIRES_IN: "15m"
+  TEMP_JWT_EXPIRES_IN: "5m"
+  REFRESH_JWT_EXPIRES_IN: "7d"
+  # Claves RSA montadas desde el Secret master-gateway-keys (ver deployment).
+  JWT_PRIVATE_KEY_PATH: "/app/keys/private.pem"
+  JWT_PUBLIC_KEY_PATH: "/app/keys/public.pem"
+  INTERNAL_ALLOWED_SERVICES: "ventas"
+  # El probe de servicios externos debe alcanzar Services internos del cluster,
+  # que viven en rangos privados. En un cluster expuesto a Internet valórese
+  # ponerlo en "false" y usar un egress controlado.
+  ALLOW_PRIVATE_PROBE_TARGETS: "true"
+  # Ventas (microservicio hijo) valida contra el Master.
+  MASTER_VALIDATE_URL: "http://backend:3000/api/internals/validate-token"
+  MASTER_INTERNAL_SERVICE_NAME: "ventas"
+  VENTAS_ALLOWED_ROLES: "ADMIN,VENTAS"
+  VENTAS_PORT: "3006"

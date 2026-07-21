@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        # fsGroup hace que los volúmenes montados (el Secret de claves RSA) sean
+        # legibles por el grupo 1000, al que pertenece el proceso. Sin esto, el
+        # Secret queda owned root:root 0400 y el uid 1000 no puede leer la clave.
+        fsGroup: 1000
+      containers:
+        - name: backend
+          image: master-gateway-backend:dev
+          imagePullPolicy: IfNotPresent
+          # El Deployment sólo sirve tráfico. Migración y seed los hace el Job
+          # db-migrate, para que las réplicas no compitan por sembrar.
+          command: ["node", "backend/dist/src/main.js"]
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: master-gateway-config
+            - secretRef:
+                name: master-gateway-secrets
+          volumeMounts:
+            # CRÍTICO para el escalado horizontal: todas las réplicas firman los
+            # JWT/JWE con el MISMO par de claves RSA, montado desde un Secret. Si
+            # cada pod autogenerara su propio par (comportamiento por defecto de
+            # KeysService), un token emitido por un pod sería rechazado por otro.
+            - name: rsa-keys
+              mountPath: /app/keys
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/health/db
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+      volumes:
+        - name: rsa-keys
+          secret:
+            secretName: master-gateway-keys
+            # 0440: lectura para owner (root) y grupo (fsGroup 1000). No world-readable.
+            defaultMode: 0440

@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: master-gateway
+
+resources:
+  - ../../base
+
+# Los Secrets se generan a partir de archivos IGNORADOS por git, para no
+# versionar valores sensibles (ver secrets.env.example y el README).
+secretGenerator:
+  - name: master-gateway-secrets
+    envs:
+      - secrets.env
+  - name: master-gateway-keys
+    files:
+      - keys/private.pem
+      - keys/public.pem
+
+# Sin sufijo de hash: mantiene nombres estables para que el volumen de claves y
+# los envFrom del backend los referencien de forma predecible.
+generatorOptions:
+  disableNameSuffixHash: true

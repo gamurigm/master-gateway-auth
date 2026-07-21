@@ -22,3 +22,7 @@ __pycache__/
 # la clave privada: en produccion y K8s se montan desde un Secret.
 keys/
 *.pem
+
+# Secretos y claves de los overlays de Kubernetes (solo se versiona el .example).
+k8s/overlays/*/secrets.env
+k8s/overlays/*/keys/
