@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { authService } from '../services/auth.service'
+import { useMenuStore } from '../stores/menu'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -35,18 +36,40 @@ const router = createRouter({
         { path: 'menus', name: 'Menus', component: () => import('../views/MenuListView.vue') },
         { path: 'menus/new', name: 'MenuNew', component: () => import('../views/MenuFormView.vue') },
         { path: 'menus/:id', name: 'MenuEdit', component: () => import('../views/MenuFormView.vue') },
+        { path: 'external-services', name: 'ExternalServices', component: () => import('../views/ExternalServiceListView.vue') },
+        { path: 'external-services/new', name: 'ExternalServiceNew', component: () => import('../views/ExternalServiceFormView.vue') },
         { path: 'inventario', name: 'Inventory', component: () => import('../views/InventoryView.vue') },
       ],
     },
     { path: '/unauthorized', name: 'Unauthorized', component: () => import('../views/UnauthorizedView.vue') },
-    { path: '/:pathMatch(.*)*', redirect: '/login' },
+    { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('../views/UnauthorizedView.vue') },
   ],
 })
 
-router.beforeEach((to, _from, next) => {
-  if (to.meta.requiresAuth && !authService.isAuthenticated()) {
+router.beforeEach(async (to, _from, next) => {
+  const authed = authService.isAuthenticated()
+
+  if (to.meta.requiresAuth && !authed) {
     return next('/login')
   }
+
+  // Tras un refresh de página el router se reinicia y pierde las rutas
+  // inyectadas dinámicamente, de modo que un menú de servicio externo caería a
+  // NotFound. Si el usuario está autenticado y va a una ruta /app/* que aún no
+  // resuelve, se recargan las rutas y se reintenta una única vez.
+  const unresolved = to.matched.length === 0 || to.name === 'NotFound'
+  if (authed && unresolved && to.path.startsWith('/app/') && !to.query.__retry) {
+    const menuStore = useMenuStore()
+    await menuStore.ensureRoutes(router)
+    return next({ path: to.path, query: { ...to.query, __retry: '1' }, replace: true })
+  }
+
+  // Limpia el marcador de reintento para no dejarlo en la barra de direcciones.
+  if (to.query.__retry) {
+    const { __retry, ...rest } = to.query
+    return next({ path: to.path, query: rest, replace: true })
+  }
+
   next()
 })
 

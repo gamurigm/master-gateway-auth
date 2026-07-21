@@ -17,3 +17,8 @@ reports/codebert-changed-files.txt
 .cache/huggingface/
 __pycache__/
 .claude
+
+# Claves RSA generadas en tiempo de ejecucion por KeysService. NUNCA versionar
+# la clave privada: en produccion y K8s se montan desde un Secret.
+keys/
+*.pem

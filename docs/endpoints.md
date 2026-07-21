@@ -39,9 +39,29 @@ Requieren `Authorization: Bearer <accessToken>`.
 | `PUT` | `/modules/:id` | `ADMIN` | Actualiza modulo |
 | `DELETE` | `/modules/:id` | `ADMIN` | Inactiva modulo |
 | `GET` | `/menus` | `ADMIN` | Lista menus activos |
+| `GET` | `/menus/tree` | Autenticado | Arbol de menus del rol activo |
 | `POST` | `/menus` | `ADMIN` | Crea menu |
 | `PUT` | `/menus/:id` | `ADMIN` | Actualiza menu |
 | `DELETE` | `/menus/:id` | `ADMIN` | Inactiva menu |
+| `GET` | `/external-services` | `ADMIN` | Lista servicios externos registrados |
+| `POST` | `/external-services/probe` | `ADMIN` | Verifica un servicio SIN registrarlo (probe anti-SSRF) |
+| `GET` | `/external-services/:id` | `ADMIN` | Obtiene un servicio |
+| `POST` | `/external-services` | `ADMIN` | Registra un servicio (exige probe exitoso) |
+| `POST` | `/external-services/:id/probe` | `ADMIN` | Re-verifica y persiste el estado |
+| `POST` | `/external-services/:id/provision` | `ADMIN` | Genera modulo, menus y asignaciones de rol |
+| `PUT` | `/external-services/:id` | `ADMIN` | Actualiza un servicio |
+| `DELETE` | `/external-services/:id` | `ADMIN` | Inactiva un servicio |
+
+### Flujo de registro de un microservicio externo
+
+1. `POST /external-services/probe` con `{ baseUrl, healthPath }` — comprueba que el servicio
+   responde y descubre endpoints por OpenAPI si expone `openApiPath`. **No persiste nada.**
+2. `POST /external-services` — registra el servicio. El backend **vuelve a verificar** el probe;
+   un servicio caido no se registra (generaria menus rotos).
+3. `POST /external-services/:id/provision` con `{ roleIds, items }` — en una transaccion crea el
+   modulo, un menu raiz agrupador (sin `url`) y un menu hoja por endpoint (con `url`), mas las
+   asignaciones rol-modulo y rol-menu. El frontend recarga el arbol e inyecta las rutas con
+   `router.addRoute()` sin recargar la pagina.
 
 ## Microservicio hijo `ventas`
 

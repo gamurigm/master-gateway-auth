@@ -193,6 +193,17 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/master_gateway?schema=public
       SONAR_HOST_URL: http://localhost:9000
+      # docker compose interpola TODO el archivo antes de decidir qué servicios
+      # levantar, así que aunque este job sólo arranca sonar-db/sonarqube, exige
+      # las variables ${...:?} del bloque backend. Estos valores son de usar y
+      # tirar: los contenedores de Sonar nunca los leen. Los secretos reales
+      # llegan por GitHub Secrets al job de deploy.
+      JWT_SECRET: ci-sonar-placeholder-not-used
+      JWE_SECRET: ci-sonar-placeholder-32bytes-xxx
+      TEMP_JWT_SECRET: ci-sonar-placeholder-not-used
+      REFRESH_JWT_SECRET: ci-sonar-placeholder-not-used
+      INTERNAL_API_KEY: ci-sonar-placeholder-not-used
+      SEED_ADMIN_PASSWORD: ci-sonar-placeholder-not-used
     steps:
       - name: Checkout
         uses: actions/checkout@v4
