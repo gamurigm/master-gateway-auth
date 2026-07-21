@@ -290,8 +290,8 @@ onMounted(async () => {
 .field input { width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border, #2a2e37); background: var(--bg, #12141a); color: inherit; }
 .probe-row { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
 .probe-status { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600; }
-.probe-status.ok { color: #6bd18f; }
-.probe-status.fail { color: #ff8b8b; }
+.probe-status.ok { color: #16a34a; }
+.probe-status.fail { color: var(--error-text); }
 .discovered { opacity: 0.8; font-size: 0.9rem; }
 .roles-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.5rem 0 1rem; }
 .role-check { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.75rem; border: 1px solid var(--border, #2a2e37); border-radius: 8px; }
@@ -302,5 +302,5 @@ onMounted(async () => {
 .preview-list { list-style: none; padding: 0; margin: 1rem 0; }
 .preview-list li { padding: 0.4rem 0; display: flex; align-items: center; gap: 0.5rem; }
 .wizard-actions { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; }
-.error { color: #ff8b8b; margin-top: 1rem; }
+.error { color: var(--error-text); margin-top: 1rem; }
 </style>

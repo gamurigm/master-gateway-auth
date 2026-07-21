@@ -116,16 +116,16 @@ docs/              # Documentacion, diagramas y coleccion HTTP
 
 ### Gestion
 
-| Metodo | Ruta | Descripcion |
-| --- | --- | --- |
-| `GET` | `/api/users` | Listar usuarios |
-| `POST` | `/api/users` | Crear usuario |
-| `GET` | `/api/roles` | Listar roles |
-| `POST` | `/api/roles` | Crear rol |
-| `GET` | `/api/modules` | Listar modulos |
-| `POST` | `/api/modules` | Crear modulo |
-| `GET` | `/api/menus/tree` | Arbol de menus por rol |
-| `POST` | `/api/menus` | Crear menu |
+| Metodo | Ruta              | Descripcion            |
+| --------| -------------------| ------------------------|
+| `GET`  | `/api/users`      | Listar usuarios        |
+| `POST` | `/api/users`      | Crear usuario          |
+| `GET`  | `/api/roles`      | Listar roles           |
+| `POST` | `/api/roles`      | Crear rol              |
+| `GET`  | `/api/modules`    | Listar modulos         |
+| `POST` | `/api/modules`    | Crear modulo           |
+| `GET`  | `/api/menus/tree` | Arbol de menus por rol |
+| `POST` | `/api/menus`      | Crear menu             |
 
 ### Microservicio ventas
 
@@ -140,12 +140,56 @@ docs/              # Documentacion, diagramas y coleccion HTTP
 npm run prisma:seed
 ```
 
-Crea: admin, rol admin, modulo Administracion y menus iniciales.
+Crea 3 usuarios, sus roles, los módulos Administración y Ventas, y los menús
+iniciales. Todos los IDs son UUID v4 reales.
 
-Credenciales demo:
+| Email                | Password      | Rol             |
+| ----------------------| ---------------| -----------------|
+| `admin@example.com`  | `Admin12345!` | ADMIN (ve todo) |
+| `demo@example.com`   | `Demo12345!`  | USER            |
+| `ventas@example.com` | `Demo12345!`  | VENTAS          |
 
-- Email: `admin@example.com`
-- Password: `Admin12345!`
+> La contraseña del admin sale de `SEED_ADMIN_PASSWORD` (default `Admin12345!`);
+> las de demo/ventas de `SEED_DEMO_PASSWORD` (default `Demo12345!`).
+
+## Probar en local (paso a paso)
+
+Levanta cada pieza en **su propia terminal**, en este orden:
+
+```bash
+# 1. Base de datos
+docker compose up -d postgres
+
+# 2. Migraciones + seed (solo la primera vez, o tras cambiar el schema)
+npm run prisma:migrate
+npm run prisma:seed
+
+# 3. Backend (Master) — espera a "Nest application successfully started"
+npm run dev:backend        # http://localhost:3000
+
+# 4. Frontend Vue (SPA)
+npm run dev:frontend       # http://localhost:4200
+
+# 5. (Opcional) Microservicio hijo de ventas
+npm run dev:ventas         # http://localhost:3006
+```
+
+Abre **`http://localhost:4200`**, inicia sesión con `admin@example.com` /
+`Admin12345!` y **selecciona el rol** (no entra directo al dashboard: primero está
+el Workspace Selector).
+
+### Problemas comunes
+
+| Síntoma | Causa | Solución |
+| --- | --- | --- |
+| `ng serve ... requires Node v22.22.3` | Estás en `frontend/` (Angular legado) | Usa `frontend-vue/`: `npm run dev:frontend` |
+| Página no carga en `localhost:4201` | 4201 es el puerto de **compose**, no de dev | En dev el SPA está en **4200** |
+| `Error al iniciar sesion` + `ECONNREFUSED ::1:3000` en Vite | El backend no está corriendo | Levanta `npm run dev:backend` en otra terminal |
+| Sigue `ECONNREFUSED ::1:3000` con el backend arriba | Windows resuelve `localhost` a IPv6; el backend escucha en IPv4 | Ya resuelto: el proxy de Vite apunta a `127.0.0.1` (reinicia Vite) |
+| Login responde 401 con credenciales correctas | Falta el seed | `npm run prisma:seed` |
+
+Verifica que el backend responde: abre `http://localhost:3000/api/health` →
+debe devolver `{"status":"ok",...}`.
 
 ## Pruebas
 

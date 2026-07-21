@@ -27,7 +27,11 @@ import { UsersModule } from './users/users.module';
     ]),
     ServeStaticModule.forRoot({
       rootPath: process.env.FRONTEND_DIST_PATH ?? join(__dirname, '..', '..', '..', 'frontend', 'dist'),
-      exclude: ['/api/(.*)', '/health(.*)'],
+      // Sintaxis de path-to-regexp v8 (Express 5): los grupos regex sin nombre
+      // como `(.*)` ya no son válidos y lanzan PathError. `{/*splat}` es el
+      // wildcard con nombre equivalente, que matchea el prefijo y todo lo que
+      // cuelga de él (`/api`, `/api/`, `/api/auth/login`).
+      exclude: ['/api{/*splat}', '/health{/*splat}'],
     }),
     PrismaModule,
     AuthModule,

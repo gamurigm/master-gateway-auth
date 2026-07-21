@@ -56,12 +56,18 @@ router.beforeEach(async (to, _from, next) => {
   // Tras un refresh de página el router se reinicia y pierde las rutas
   // inyectadas dinámicamente, de modo que un menú de servicio externo caería a
   // NotFound. Si el usuario está autenticado y va a una ruta /app/* que aún no
-  // resuelve, se recargan las rutas y se reintenta una única vez.
+  // resuelve, se recargan las rutas y se reintenta UNA vez.
   const unresolved = to.matched.length === 0 || to.name === 'NotFound'
-  if (authed && unresolved && to.path.startsWith('/app/') && !to.query.__retry) {
-    const menuStore = useMenuStore()
-    await menuStore.ensureRoutes(router)
-    return next({ path: to.path, query: { ...to.query, __retry: '1' }, replace: true })
+  if (authed && unresolved && to.path.startsWith('/app/')) {
+    if (!to.query.__retry) {
+      const menuStore = useMenuStore()
+      await menuStore.ensureRoutes(router)
+      return next({ path: to.path, query: { ...to.query, __retry: '1' }, replace: true })
+    }
+    // Ya se reintentó y la ruta SIGUE sin resolver: se cae al dashboard en vez
+    // de re-navegar a la misma ruta (eso provocaba un bucle infinito que colgaba
+    // la app con cualquier /app/* sin ruta registrada).
+    return next({ path: '/app', replace: true })
   }
 
   // Limpia el marcador de reintento para no dejarlo en la barra de direcciones.

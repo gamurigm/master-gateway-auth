@@ -20,30 +20,35 @@ const DYNAMIC_ROUTE_PREFIX = 'dynamic:'
 /** Guarda las funciones de desregistro que devuelve router.addRoute. */
 const registered = new Map<string, () => void>()
 
-function collectLeaves(node: MenuNode, acc: MenuNode[]): void {
-  if (node.url && node.children.length === 0) {
+function collectRoutableNodes(node: MenuNode, acc: MenuNode[]): void {
+  // Un nodo se registra si tiene `url`, AUNQUE tenga hijos: un menú padre puede
+  // ser a la vez clicable (url propia) y agrupador (submenús). Antes sólo se
+  // registraban las hojas sin hijos, así que un padre-con-url como "Ventas"
+  // (/app/sales, con el submenú "Pedidos") no tenía ruta y al clicarlo colgaba
+  // la app en el bucle de reintento del guard.
+  if (node.url) {
     acc.push(node)
   }
   for (const child of node.children) {
-    collectLeaves(child, acc)
+    collectRoutableNodes(child, acc)
   }
 }
 
 /**
- * Registra las rutas de todos los menús hoja internos que aún no existen.
+ * Registra las rutas de todos los menús internos con url que aún no existen.
  * Devuelve cuántas rutas nuevas se añadieron (útil para tests y logs).
  */
 export function registerMenuRoutes(router: Router, tree: MenuModule[]): number {
-  const leaves: MenuNode[] = []
+  const nodes: MenuNode[] = []
   for (const mod of tree) {
     for (const menu of mod.menus) {
-      collectLeaves(menu, leaves)
+      collectRoutableNodes(menu, nodes)
     }
   }
 
   let added = 0
-  for (const leaf of leaves) {
-    const url = leaf.url ?? ''
+  for (const node of nodes) {
+    const url = node.url ?? ''
     // Sólo rutas internas de la SPA. Las URLs absolutas se abren en otra pestaña
     // desde el propio ítem de menú, no necesitan ruta.
     if (!url.startsWith('/app/')) continue
@@ -62,7 +67,7 @@ export function registerMenuRoutes(router: Router, tree: MenuModule[]): number {
       path: relativePath,
       name: routeName,
       component: () => import('../views/DynamicPageView.vue'),
-      meta: { requiresAuth: true, menu: leaf },
+      meta: { requiresAuth: true, menu: node },
     })
     registered.set(routeName, remove)
     added += 1
