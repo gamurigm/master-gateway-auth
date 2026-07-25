@@ -75,6 +75,7 @@ services:
       - "8443:8443"   # Kong Proxy HTTPS
       - "8001:8001"   # Kong Admin API
       - "8444:8444"   # Kong Admin API HTTPS
+      - "3000:8000"   # Kong Proxy (para microservicios externos que apuntan a :3000)
     healthcheck:
       test: ["CMD-SHELL", "kong health"]
       interval: 10s
@@ -144,8 +145,8 @@ services:
       OPA_URL: http://opa:8181
       SEED_ADMIN_EMAIL: admin@example.com
       SEED_ADMIN_PASSWORD: Admin12345!
-    ports:
-      - "${BACKEND_PORT:-3000}:3000"
+    expose:
+      - "3000"  # Solo interna (Docker network); el acceso externo va por Kong :3000
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s
@@ -170,6 +171,7 @@ services:
       KONG_SERVICE_URL: http://backend:3000
       KONG_ROUTE_PATHS: /api
       KONG_WAIT_TIME: 15
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-docker-internal-key}
     command: ["node", "auto-register-kong.js"]
     restart: "no"  # Solo se ejecuta una vez
 
