@@ -22,14 +22,6 @@ services:
         value: master-gateway
       - key: JWT_AUDIENCE
         value: master-gateway-clients
-      - key: JWE_SECRET
-        sync: false
-      - key: JWT_SECRET
-        sync: false
-      - key: TEMP_JWT_SECRET
-        sync: false
-      - key: REFRESH_JWT_SECRET
-        sync: false
       - key: INTERNAL_API_KEY
         sync: false
       - key: INTERNAL_ALLOWED_SERVICES

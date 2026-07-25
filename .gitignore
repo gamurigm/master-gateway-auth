@@ -3,6 +3,7 @@ dist/
 coverage/
 .angular/
 .cache/
+.env
 .env.local
 .env.*.local
 *.log
