@@ -110,7 +110,7 @@ El workflow `.github/workflows/ci.yml` ejecuta:
 - Build backend.
 - Tests unitarios backend.
 - Tests e2e backend.
-- Type check y build frontend.
+- Build frontend (Vue 3).
 - SonarQube Community en contenedores Docker solo en `main`.
 - Espera y aplica el Quality Gate antes del despliegue; solo `OK` permite continuar.
 - Ejecuta CodeBERT SAST despues de SonarQube en `main`; el deploy requiere SAST exitoso.

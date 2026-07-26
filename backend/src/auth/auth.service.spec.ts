@@ -5,8 +5,9 @@ import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { generateKeyPairSync } from 'node:crypto';
 import type { Algorithm } from 'jsonwebtoken';
-import { EncryptJWT, jwtDecrypt } from 'jose';
+import { EncryptJWT, jwtDecrypt, importPKCS8, importSPKI } from 'jose';
 import { GatewaySessionService } from '../common/auth/gateway-session.service';
+import { KeysService } from '../common/keys/keys.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 
@@ -14,7 +15,6 @@ const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ROLE_ID = '22222222-2222-2222-2222-222222222222';
 const EMAIL = 'admin@example.com';
 const PASSWORD = 'Admin12345!';
-const JWE_SECRET = 'test-jwe-secret-exactly-32-bytes';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
@@ -77,25 +77,31 @@ describe('AuthService', () => {
     passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
   });
 
+  let keysService: KeysService;
+
   beforeEach(() => {
     jest.clearAllMocks();
     process.env['INTERNAL_API_KEY'] = 'test-internal-key';
-    process.env['INTERNAL_ALLOWED_SERVICES'] = 'ventas';
+    process.env['INTERNAL_ALLOWED_SERVICES'] = '';
     jwtService = new JwtService(jwtOptions);
     configService = new ConfigService({
-      JWE_SECRET,
       JWT_ISSUER: 'master-gateway',
       JWT_AUDIENCE: 'master-gateway-clients',
     });
+    keysService = new KeysService(configService);
+    jest.spyOn(keysService, 'getPublicKey').mockReturnValue(publicKey);
+    jest.spyOn(keysService, 'getPrivateKey').mockReturnValue(privateKey);
     gatewaySessionService = new GatewaySessionService(
       prisma as unknown as PrismaService,
       configService,
+      keysService,
     );
     service = new AuthService(
       prisma as unknown as PrismaService,
       jwtService,
       configService,
       gatewaySessionService,
+      keysService,
     );
     prisma.refreshToken.create.mockResolvedValue({});
     prisma.refreshToken.update.mockResolvedValue({});
@@ -156,9 +162,10 @@ describe('AuthService', () => {
     });
 
     const result = await service.selectRole({ tempToken, roleId: ROLE_ID });
+    const privateKeyObj = await importPKCS8(privateKey, 'RSA-OAEP-256');
     const { payload: accessPayload } = await jwtDecrypt(
       result.accessToken,
-      new TextEncoder().encode(JWE_SECRET),
+      privateKeyObj,
       {
         issuer: 'master-gateway',
         audience: 'master-gateway-clients',
@@ -174,7 +181,7 @@ describe('AuthService', () => {
 
     const { payload: refreshPayload } = await jwtDecrypt(
       result.refreshToken,
-      new TextEncoder().encode(JWE_SECRET),
+      privateKeyObj,
       {
         issuer: 'master-gateway',
         audience: 'master-gateway-clients',
@@ -280,14 +287,42 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('validateInternal rejects internal services outside the allowlist', async () => {
-    process.env['INTERNAL_ALLOWED_SERVICES'] = 'ventas';
+  it('validateInternal accepts a valid JWE for ANY service when allowlist is empty (dynamic)', async () => {
+    const tempToken = await jwtService.signAsync(
+      { sub: USER_ID, email: EMAIL },
+      { expiresIn: '5m' },
+    );
+    prisma.userRole.findFirst.mockResolvedValue({
+      role: { id: ROLE_ID, name: 'ADMIN' },
+    });
+    const session = await service.selectRole({ tempToken, roleId: ROLE_ID });
+    prisma.refreshToken.findUnique.mockResolvedValue({
+      userId: USER_ID,
+      roleId: ROLE_ID,
+      estado: Estado.ACTIVO,
+      revokedAt: null,
+      replacedByJti: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      user: { estado: Estado.ACTIVO },
+      role: { id: ROLE_ID, name: 'ADMIN', estado: Estado.ACTIVO },
+    });
+
     await expect(
-      service.validateInternal('test-internal-key', 'token', 'reportes'),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+      service.validateInternal(
+        'test-internal-key',
+        session.accessToken,
+        'servicio-dinamico-xyz',
+      ),
+    ).resolves.toMatchObject({
+      valid: true,
+      userId: USER_ID,
+      roleId: ROLE_ID,
+      roleName: 'ADMIN',
+    });
   });
 
-  it('validateInternal accepts a valid JWE for an allowed service', async () => {
+  it('validateInternal accepts a valid JWE for an allowlisted service (legacy mode)', async () => {
+    process.env['INTERNAL_ALLOWED_SERVICES'] = 'ventas,reportes';
     const tempToken = await jwtService.signAsync(
       { sub: USER_ID, email: EMAIL },
       { expiresIn: '5m' },
@@ -321,12 +356,34 @@ describe('AuthService', () => {
     });
   });
 
-  const createRefreshToken = (jti: string) =>
-    new EncryptJWT({ sub: USER_ID, jti })
-      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+  it('validateInternal rejects a service outside the explicit allowlist (legacy mode)', async () => {
+    process.env['INTERNAL_ALLOWED_SERVICES'] = 'ventas';
+    await expect(
+      service.validateInternal('test-internal-key', 'token', 'reportes'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('validateInternal rejects empty/undefined service names even with empty allowlist', async () => {
+    process.env['INTERNAL_ALLOWED_SERVICES'] = '';
+    await expect(
+      service.validateInternal('test-internal-key', 'token', undefined),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      service.validateInternal('test-internal-key', 'token', ''),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      service.validateInternal('test-internal-key', 'token', '   '),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  const createRefreshToken = async (jti: string) => {
+    const publicKeyObj = await importSPKI(publicKey, 'RSA-OAEP-256');
+    return new EncryptJWT({ sub: USER_ID, jti })
+      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
       .setIssuedAt()
       .setExpirationTime('7d')
       .setIssuer('master-gateway')
       .setAudience('master-gateway-clients')
-      .encrypt(new TextEncoder().encode(JWE_SECRET));
+      .encrypt(publicKeyObj);
+  };
 });

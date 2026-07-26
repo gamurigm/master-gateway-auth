@@ -33,15 +33,10 @@ jobs:
           filters: |
             has_code:
               - 'backend/src/**/*.ts'
-              - 'frontend/src/**/*.ts'
-              - 'frontend/src/**/*.tsx'
-              - 'frontend/src/**/*.html'
               - 'frontend-vue/src/**/*.ts'
               - 'frontend-vue/src/**/*.vue'
             has_security_relevant:
               - 'backend/src/**/*.ts'
-              - 'frontend/src/**/*.ts'
-              - 'frontend/src/**/*.tsx'
               - 'frontend-vue/src/**/*.ts'
               - 'frontend-vue/src/**/*.vue'
               - 'backend/prisma/schema.prisma'
@@ -256,7 +251,7 @@ jobs:
         id: source_hash
         shell: bash
         run: |
-          HASH=$(find backend/src frontend-vue/src -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.vue' -o -name '*.js' -o -name '*.jsx' \) 2>/dev/null | sort | xargs md5sum 2>/dev/null | md5sum | cut -d' ' -f1)
+          HASH=$(find backend/src frontend-vue/src -type f \( -name '*.ts' -o -name '*.vue' -o -name '*.js' \) 2>/dev/null | sort | xargs md5sum 2>/dev/null | md5sum | cut -d' ' -f1)
           echo "hash=$HASH" >> "$GITHUB_OUTPUT"
           echo "Source files hash: $HASH"
 
@@ -275,10 +270,18 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch origin "${{ github.base_ref }}"
             git diff --name-only "origin/${{ github.base_ref }}...HEAD" > reports/codebert-changed-files-all.txt
-            grep -E '\.(c|cc|cpp|cxx|h|hpp|java|js|jsx|py|rs|ts|tsx)$' reports/codebert-changed-files-all.txt | grep -v '^scripts/' > reports/codebert-changed-files.txt || true
           else
-            find backend/src frontend/src frontend-vue/src -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.vue' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files.txt
+            if [ "${{ github.event_name }}" = "push" ]; then
+              if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+                git diff --name-only HEAD~1 HEAD > reports/codebert-changed-files-all.txt
+              else
+                find backend/src frontend-vue/src -type f \( -name '*.ts' -o -name '*.js' -o -name '*.vue' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files-all.txt
+              fi
+            else
+              find backend/src frontend-vue/src -type f \( -name '*.ts' -o -name '*.js' -o -name '*.vue' -o -name '*.py' -o -name '*.java' -o -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.rs' \) > reports/codebert-changed-files-all.txt
+            fi
           fi
+          grep -E '\.(c|cc|cpp|cxx|h|hpp|java|js|jsx|py|rs|ts|tsx|vue)$' reports/codebert-changed-files-all.txt | grep -v '^scripts/' > reports/codebert-changed-files.txt || true
           cat reports/codebert-changed-files.txt
 
       - name: Build CodeBERT SAST image
@@ -505,6 +508,7 @@ jobs:
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       needs.build-test.result == 'success' &&
+      needs.detect-changes.outputs.has_code == 'true' &&
       needs.sonarqube.result == 'success' &&
       needs.sonarqube.outputs.gate_status == 'OK' &&
       needs.codebert-sast.result == 'success'
@@ -528,6 +532,7 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Configure Render backend service
+        id: render_config
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
@@ -556,6 +561,33 @@ jobs:
             --wait \
             --commit "$GITHUB_SHA"
 
+      - name: OWASP ZAP DAST Scan
+        continue-on-error: true
+        env:
+          SERVICE_URL: ${{ steps.render_config.outputs.service_url }}
+        run: |
+          docker run --rm \
+            -v "$PWD/reports:/zap/wrk" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t "$SERVICE_URL" \
+            -r dast-report.html \
+            -w dast-report.md \
+            -x dast-report.xml \
+            -I \
+            --autooff
+
+      - name: Upload DAST report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dast-report
+          path: |
+            reports/dast-report.html
+            reports/dast-report.md
+            reports/dast-report.xml
+          retention-days: 30
+
       - name: Notify deploy result
         if: always()
         uses: appleboy/telegram-action@4cd2253b24c9682a5be99eb6f7ab3484586978fa
@@ -563,7 +595,7 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            Master Gateway - Despliegue en Render terminado.
+            Master Gateway - Despliegue y DAST completado.
 
             Resultado: ${{ job.status }}
             Commit: ${{ github.sha }}

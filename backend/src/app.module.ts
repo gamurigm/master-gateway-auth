@@ -8,13 +8,14 @@ import { AuthModule } from './auth/auth.module';
 import { RequestLoggingMiddleware } from './common/observability/request-logging.middleware';
 import { PolicyModule } from './common/policy/policy.module';
 import { validateEnv } from './config/env.validation';
+import { InternalProxyModule } from './internal-proxy/internal-proxy.module';
 import { MenusModule } from './menus/menus.module';
 import { ModulesModule } from './modules/modules.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RolesModule } from './roles/roles.module';
-import { UsersModule } from './users/users.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { TicketsModule } from './tickets/tickets.module';
     ModulesModule,
     MenusModule,
     PermissionsModule,
+    InternalProxyModule,
   ],
   controllers: [AppController],
   providers: [

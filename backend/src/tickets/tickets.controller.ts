@@ -1,10 +1,4 @@
-import {
-  Body,
-  Controller,
-  MessageEvent,
-  Post,
-  Sse,
-} from '@nestjs/common';
+import { Body, Controller, MessageEvent, Post, Sse } from '@nestjs/common';
 import { Observable, map } from 'rxjs';
 import { SseEvent, SseService } from './sse.service';
 

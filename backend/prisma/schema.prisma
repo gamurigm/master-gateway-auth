@@ -68,6 +68,8 @@ model SystemModule {
   code        String       @unique @map("codigo")
   name        String       @map("nombre")
   description String?      @map("descripcion")
+  baseUrl     String?      @map("base_url")
+  serviceName String?      @map("service_name")
   estado      Estado       @default(ACTIVO)
   createdAt   DateTime     @default(now()) @map("fecha_creacion")
   updatedAt   DateTime     @updatedAt @map("fecha_actualizacion")

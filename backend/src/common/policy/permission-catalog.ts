@@ -137,7 +137,9 @@ export const PERMISSIONS = [
   },
 ] satisfies PermissionDefinition[];
 
-export const ALL_PERMISSION_CODES = PERMISSIONS.map((permission) => permission.code);
+export const ALL_PERMISSION_CODES = PERMISSIONS.map(
+  (permission) => permission.code,
+);
 
 export const ADMIN_PERMISSION_CODES = PERMISSIONS.filter(
   (permission) => permission.action !== 'delete_hard',

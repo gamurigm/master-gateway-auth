@@ -4,33 +4,34 @@ services:
     container_name: master-gateway-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: master_gateway
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-master_gateway}
     ports:
       - "${POSTGRES_PORT:-5442}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d master_gateway"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-master_gateway}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   kong-db:
-    image: postgres:16-alpine
+    image: postgres:15-alpine
     container_name: kong-database
     restart: unless-stopped
     environment:
-      POSTGRES_USER: kong
-      POSTGRES_DB: kong
-      POSTGRES_PASSWORD: kong
+      POSTGRES_USER: ${KONG_DB_USER:-kong}
+      POSTGRES_DB: ${KONG_DB_NAME:-kong}
+      POSTGRES_PASSWORD: ${KONG_DB_PASSWORD:-kong}
+      POSTGRES_HOST_AUTH_METHOD: ${KONG_DB_AUTH_METHOD:-password}
     ports:
       - "5443:5432"
     volumes:
       - kong-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kong -d kong"]
+      test: ["CMD-SHELL", "pg_isready -U ${KONG_DB_USER:-kong} -d ${KONG_DB_NAME:-kong}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -44,9 +45,9 @@ services:
     environment:
       KONG_DATABASE: postgres
       KONG_PG_HOST: kong-db
-      KONG_PG_USER: kong
-      KONG_PG_PASSWORD: kong
-      KONG_PG_DATABASE: kong
+      KONG_PG_USER: ${KONG_DB_USER:-kong}
+      KONG_PG_PASSWORD: ${KONG_DB_PASSWORD:-kong}
+      KONG_PG_DATABASE: ${KONG_DB_NAME:-kong}
     command: kong migrations bootstrap
 
   kong:
@@ -61,9 +62,9 @@ services:
     environment:
       KONG_DATABASE: postgres
       KONG_PG_HOST: kong-db
-      KONG_PG_USER: kong
-      KONG_PG_PASSWORD: kong
-      KONG_PG_DATABASE: kong
+      KONG_PG_USER: ${KONG_DB_USER:-kong}
+      KONG_PG_PASSWORD: ${KONG_DB_PASSWORD:-kong}
+      KONG_PG_DATABASE: ${KONG_DB_NAME:-kong}
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
@@ -94,9 +95,9 @@ services:
       DB_ADAPTER: postgres
       DB_HOST: kong-db
       DB_PORT: 5432
-      DB_USER: kong
-      DB_PASSWORD: kong
-      DB_DATABASE: kong
+      DB_USER: ${KONG_DB_USER:-kong}
+      DB_PASSWORD: ${KONG_DB_PASSWORD:-kong}
+      DB_DATABASE: ${KONG_DB_NAME:-kong}
       KONGA_HOOK_TIMEOUT: 120000
     ports:
       - "1337:1337"   # Konga UI
@@ -115,6 +116,17 @@ services:
     expose:
       - "8181"
 
+  generate-keys:
+    image: node:24.15.0-bookworm-slim
+    container_name: master-gateway-generate-keys
+    entrypoint: ["node", "/scripts/generate-keys.js"]
+    environment:
+      KEYS_DIR: /app/backend/keys
+    volumes:
+      - ./scripts/generate-keys.js:/scripts/generate-keys.js:ro
+      - ./backend/keys:/app/backend/keys:rw
+    restart: "no"
+
   backend:
     build:
       context: .
@@ -122,6 +134,8 @@ services:
     container_name: master-gateway-backend
     restart: unless-stopped
     depends_on:
+      generate-keys:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       opa:
@@ -129,7 +143,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/master_gateway?schema=public
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/master_gateway?schema=public}
       FRONTEND_ORIGIN: http://localhost:4200
       JWT_ISSUER: master-gateway
       JWT_AUDIENCE: master-gateway-clients
@@ -190,14 +204,14 @@ services:
     container_name: master-gateway-sonar-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: sonar
-      POSTGRES_PASSWORD: sonar
-      POSTGRES_DB: sonar
+      POSTGRES_USER: ${SONAR_DB_USER:-sonar}
+      POSTGRES_PASSWORD: ${SONAR_DB_PASSWORD:-sonar}
+      POSTGRES_DB: ${SONAR_DB_NAME:-sonar}
     volumes:
       - sonar-postgresql:/var/lib/postgresql
       - sonar-postgresql-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sonar -d sonar"]
+      test: ["CMD-SHELL", "pg_isready -U ${SONAR_DB_USER:-sonar} -d ${SONAR_DB_NAME:-sonar}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -210,9 +224,9 @@ services:
       sonar-db:
         condition: service_healthy
     environment:
-      SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
-      SONAR_JDBC_USERNAME: sonar
-      SONAR_JDBC_PASSWORD: sonar
+      SONAR_JDBC_URL: ${SONAR_JDBC_URL:-jdbc:postgresql://sonar-db:5432/sonar}
+      SONAR_JDBC_USERNAME: ${SONAR_DB_USER:-sonar}
+      SONAR_JDBC_PASSWORD: ${SONAR_DB_PASSWORD:-sonar}
     ports:
       - "${SONARQUBE_PORT:-9000}:9000"
     volumes:

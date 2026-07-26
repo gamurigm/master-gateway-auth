@@ -22,16 +22,9 @@ const PRODUCTION_SAFE_DEFAULTS: Record<string, string> = {
   FRONTEND_ORIGIN: 'http://localhost:4200',
 };
 
-const REQUIRED_KEYS = [
-  'DATABASE_URL',
-  'INTERNAL_API_KEY',
-  'OPA_URL',
-] as const;
+const REQUIRED_KEYS = ['DATABASE_URL', 'INTERNAL_API_KEY', 'OPA_URL'] as const;
 
-const CHANGE_ME_UNSAFE_KEYS = [
-  'INTERNAL_API_KEY',
-  'DATABASE_URL',
-] as const;
+const CHANGE_ME_UNSAFE_KEYS = ['INTERNAL_API_KEY', 'DATABASE_URL'] as const;
 
 export function validateEnv(config: Record<string, unknown>) {
   const nodeEnv =
@@ -39,7 +32,9 @@ export function validateEnv(config: Record<string, unknown>) {
   const isProduction = nodeEnv === 'production';
   const next: Record<string, unknown> = { ...config, NODE_ENV: nodeEnv };
 
-  const defaults = isProduction ? PRODUCTION_SAFE_DEFAULTS : DEVELOPMENT_DEFAULTS;
+  const defaults = isProduction
+    ? PRODUCTION_SAFE_DEFAULTS
+    : DEVELOPMENT_DEFAULTS;
   for (const [key, value] of Object.entries(defaults)) {
     const incoming = next[key];
     if (incoming === undefined || incoming === null || incoming === '') {
@@ -58,11 +53,12 @@ export function validateEnv(config: Record<string, unknown>) {
     for (const key of CHANGE_ME_UNSAFE_KEYS) {
       const value = next[key];
       if (typeof value === 'string' && value.startsWith('change-me')) {
-        throw new Error(`Unsafe default secret configured in production: ${key}`);
+        throw new Error(
+          `Unsafe default secret configured in production: ${key}`,
+        );
       }
     }
   }
 
   return next;
 }
-

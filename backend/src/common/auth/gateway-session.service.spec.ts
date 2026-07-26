@@ -1,14 +1,21 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Estado } from '@prisma/client';
-import { EncryptJWT } from 'jose';
+import { EncryptJWT, importSPKI } from 'jose';
+import { generateKeyPairSync } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { KeysService } from '../keys/keys.service';
 import { GatewaySessionService } from './gateway-session.service';
 
-const JWE_SECRET = 'test-jwe-secret-exactly-32-bytes';
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ROLE_ID = '22222222-2222-2222-2222-222222222222';
 const SESSION_ID = '33333333-3333-3333-3333-333333333333';
+
+const { privateKey, publicKey } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+});
 
 describe('GatewaySessionService', () => {
   let service: GatewaySessionService;
@@ -21,13 +28,17 @@ describe('GatewaySessionService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    const configService = new ConfigService({
+      JWT_ISSUER: 'master-gateway',
+      JWT_AUDIENCE: 'master-gateway-clients',
+    });
+    const keysService = new KeysService(configService);
+    jest.spyOn(keysService, 'getPublicKey').mockReturnValue(publicKey);
+    jest.spyOn(keysService, 'getPrivateKey').mockReturnValue(privateKey);
     service = new GatewaySessionService(
       prisma as unknown as PrismaService,
-      new ConfigService({
-        JWE_SECRET,
-        JWT_ISSUER: 'master-gateway',
-        JWT_AUDIENCE: 'master-gateway-clients',
-      }),
+      configService,
+      keysService,
     );
   });
 
@@ -60,13 +71,14 @@ describe('GatewaySessionService', () => {
   });
 
   it('rejects tokens without an opaque session id', async () => {
+    const publicKeyObj = await importSPKI(publicKey, 'RSA-OAEP-256');
     const token = await new EncryptJWT({ sub: USER_ID, jti: 'access-jti' })
-      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
       .setIssuedAt()
       .setExpirationTime('5m')
       .setIssuer('master-gateway')
       .setAudience('master-gateway-clients')
-      .encrypt(new TextEncoder().encode(JWE_SECRET));
+      .encrypt(publicKeyObj);
 
     await expect(service.resolveAccessToken(token)).rejects.toBeInstanceOf(
       UnauthorizedException,
@@ -84,12 +96,14 @@ describe('GatewaySessionService', () => {
     role: { id: ROLE_ID, name: 'ADMIN', estado: Estado.ACTIVO },
   });
 
-  const createAccessToken = () =>
-    new EncryptJWT({ sub: USER_ID, jti: 'access-jti', sid: SESSION_ID })
-      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+  const createAccessToken = async () => {
+    const publicKeyObj = await importSPKI(publicKey, 'RSA-OAEP-256');
+    return new EncryptJWT({ sub: USER_ID, jti: 'access-jti', sid: SESSION_ID })
+      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
       .setIssuedAt()
       .setExpirationTime('5m')
       .setIssuer('master-gateway')
       .setAudience('master-gateway-clients')
-      .encrypt(new TextEncoder().encode(JWE_SECRET));
+      .encrypt(publicKeyObj);
+  };
 });

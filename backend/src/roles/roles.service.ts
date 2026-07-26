@@ -105,7 +105,10 @@ export class RolesService {
           },
         },
         permissions: {
-          where: { estado: Estado.ACTIVO, permission: { estado: Estado.ACTIVO } },
+          where: {
+            estado: Estado.ACTIVO,
+            permission: { estado: Estado.ACTIVO },
+          },
           include: { permission: true },
         },
       },
@@ -231,7 +234,11 @@ export class RolesService {
     return { success: true };
   }
 
-  async assignModule(roleId: string, moduleId: string, actor: AuthenticatedUser) {
+  async assignModule(
+    roleId: string,
+    moduleId: string,
+    actor: AuthenticatedUser,
+  ) {
     const role = await this.ensureActiveRole(roleId);
     await this.ensureActiveModule(moduleId);
     await this.policyService.assertAllowed(actor, 'roles:assign_module', {
@@ -259,7 +266,11 @@ export class RolesService {
     });
   }
 
-  async unassignModule(roleId: string, moduleId: string, actor: AuthenticatedUser) {
+  async unassignModule(
+    roleId: string,
+    moduleId: string,
+    actor: AuthenticatedUser,
+  ) {
     const role = await this.ensureActiveRole(roleId);
     await this.ensureActiveModule(moduleId);
     await this.policyService.assertAllowed(actor, 'roles:unassign_module', {

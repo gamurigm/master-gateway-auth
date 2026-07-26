@@ -57,7 +57,11 @@ export class GatewaySessionService {
   private async decryptAccessToken(token: string) {
     let payload: AccessTokenPayload;
     try {
-      payload = await decryptGatewayToken(token, this.configService, this.keysService);
+      payload = await decryptGatewayToken(
+        token,
+        this.configService,
+        this.keysService,
+      );
     } catch {
       throw new UnauthorizedException('Token invalido o expirado');
     }

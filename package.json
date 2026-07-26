@@ -4,10 +4,7 @@
     "private": true,
     "workspaces": [
         "backend",
-        "frontend",
-        "frontend-vue",
-        "services/ventas",
-        "services/inventario"
+        "frontend-vue"
     ],
     "engines": {
         "node": "^22.22.3 || ^24.15.0 || >=26.0.0",
@@ -15,22 +12,16 @@
     },
     "scripts": {
         "dev:backend": "npm run start:dev -w backend",
-        "dev:frontend": "npm start -w frontend",
-        "dev:ventas": "npm run dev -w ventas",
-        "dev:inventario": "npm run dev -w inventario",
-        "build": "npm run prisma:generate && npm run build -w backend && npm run build -w frontend-vue && npm run build -w ventas && npm run build -w inventario",
+        "dev:frontend-vue": "npm run dev -w frontend-vue",
+        "build": "npm run prisma:generate && npm run build -w backend && npm run build -w frontend-vue",
         "build:backend": "npm run build -w backend",
         "build:frontend": "npm run build -w frontend-vue",
-        "build:ventas": "npm run build -w ventas",
-        "build:inventario": "npm run build -w inventario",
         "configure:frontend": "node scripts/configure-frontend-environment.mjs",
         "start:backend:prod": "npm run prisma:deploy -w backend && node backend/dist/prisma/seed.js && npm run start:prod -w backend",
         "deploy": "node scripts/deploy.js",
-        "lint": "npm run lint -w backend && npm run lint -w ventas && npm run lint -w inventario",
-        "test": "npm run test -w backend && npm run test -w ventas && npm run test -w inventario",
+        "lint": "npm run lint -w backend",
+        "test": "npm run test -w backend",
         "test:backend": "npm run test -w backend",
-        "test:ventas": "npm run test -w ventas",
-        "test:inventario": "npm run test -w inventario",
         "test:coverage": "npm run test:cov -w backend -- --runInBand",
         "sonar:scan": "sonar-scanner",
         "prisma:validate": "node -e \"process.env.DATABASE_URL ||= 'postgresql://postgres:postgres@localhost:5442/master_gateway?schema=public'; require('node:child_process').execSync('npx prisma validate --schema backend/prisma/schema.prisma', { stdio: 'inherit', env: process.env, shell: true });\"",

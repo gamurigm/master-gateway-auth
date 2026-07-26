@@ -1,4 +1,10 @@
-import { IsOptional, IsString, MaxLength, Matches } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  MaxLength,
+  Matches,
+  IsUrl,
+} from 'class-validator';
 import { Sanitize } from '../../common/decorators/sanitize.decorator';
 
 export class UpdateModuleDto {
@@ -22,4 +28,19 @@ export class UpdateModuleDto {
   @IsString()
   @MaxLength(255)
   description?: string;
+
+  @IsOptional()
+  @IsUrl({ require_tld: false, require_protocol: true })
+  @MaxLength(512)
+  baseUrl?: string;
+
+  @Sanitize()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Matches(/^[a-z0-9_-]+$/, {
+    message:
+      'El serviceName solo puede contener minusculas, numeros, guion medio y guion bajo',
+  })
+  serviceName?: string;
 }

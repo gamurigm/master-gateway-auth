@@ -87,11 +87,14 @@ export class PolicyService {
   private async evaluate(input: PolicyInput) {
     let response: Response;
     try {
-      response = await fetch(`${this.opaUrl}/v1/data/master_gateway/authz/allow`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ input }),
-      });
+      response = await fetch(
+        `${this.opaUrl}/v1/data/master_gateway/authz/allow`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ input }),
+        },
+      );
     } catch (error) {
       this.logger.error(
         JSON.stringify({

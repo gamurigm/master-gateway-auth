@@ -10,8 +10,13 @@ COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
 COPY backend/prisma backend/prisma
 COPY frontend/package.json frontend/package.json
-COPY services/ventas/package.json services/ventas/package.json
-COPY services/inventario/package.json services/inventario/package.json
+
+RUN node -e "\
+  const fs = require('fs'); \
+  const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8')); \
+  pkg.workspaces = pkg.workspaces.filter(w => w === 'backend' || w === 'frontend'); \
+  fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 4)); \
+  console.log('✅ package.json workspaces reducidos:', pkg.workspaces);"
 
 RUN npm ci
 

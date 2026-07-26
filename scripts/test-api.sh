@@ -4,7 +4,7 @@ set -euo pipefail
 : "${API_URL:?Define API_URL, por ejemplo https://master-gateway-auth.onrender.com/api}"
 VENTAS_URL="${VENTAS_URL:-}"
 EMAIL="${EMAIL:-admin@example.com}"
-PASSWORD="${PASSWORD:-Admin12345!}"
+PASSWORD="${PASSWORD:?Define PASSWORD, ej: Admin12345!}"
 INTERNAL_API_KEY="${INTERNAL_API_KEY:-}"
 INTERNAL_SERVICE="${INTERNAL_SERVICE:-ventas}"
 command -v node >/dev/null 2>&1 || { echo "ERROR: instala Node.js para interpretar JSON." >&2; exit 1; }
@@ -16,7 +16,7 @@ json_body() {
     const bodies = {
       login: () => ({ email: args[0], password: args[1] }),
       selectRole: () => ({ tempToken: args[0], roleId: args[1] }),
-      createUser: () => ({ email: args[0], password: "PostDemo123!", firstName: "Usuario", lastName: "POST" }),
+      createUser: () => ({ email: args[0], password: process.env['TEST_USER_PASSWORD'] || 'ChangeMe123!', firstName: "Usuario", lastName: "POST" }),
       createRole: () => ({ name: args[0], description: "Rol creado por prueba remota", permissionIds: [args[1]] }),
       createModule: () => ({ code: args[0], name: "Modulo POST", description: "Modulo creado por prueba remota" }),
       createMenu: () => ({ name: "Menu POST", url: "/post-demo", icon: "flask", order: 99, moduleId: args[0] }),

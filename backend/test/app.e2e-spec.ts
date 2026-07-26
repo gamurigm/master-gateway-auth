@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Estado } from '@prisma/client';
 import { generateKeyPairSync } from 'node:crypto';
-import { EncryptJWT } from 'jose';
+import { EncryptJWT, importSPKI } from 'jose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -23,8 +23,6 @@ type HealthBody = {
   timestamp?: string;
 };
 
-process.env.JWE_SECRET = 'change-me-jwe-secret-32-bytes!!!';
-
 const { privateKey: testPrivateKey, publicKey: testPublicKey } =
   generateKeyPairSync('rsa', {
     modulusLength: 2048,
@@ -39,7 +37,6 @@ const testKeysService = {
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
-  const jweSecret = 'change-me-jwe-secret-32-bytes!!!';
   const prisma = {
     $connect: jest.fn(),
     $disconnect: jest.fn(),
@@ -57,7 +54,6 @@ describe('AppController (e2e)', () => {
   };
 
   beforeEach(async () => {
-    process.env.JWE_SECRET = jweSecret;
     jest.clearAllMocks();
     prisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
     prisma.user.findMany.mockResolvedValue([]);
@@ -86,14 +82,14 @@ describe('AppController (e2e)', () => {
       },
     );
     const policyService = {
-      assertAllowed: jest.fn(async (user: AuthenticatedUser, action: string) => {
+      assertAllowed: jest.fn((user: AuthenticatedUser, action: string) => {
         if (user.roleName === 'SUPERADMIN' || user.roleName === 'ADMIN') {
-          return;
+          return Promise.resolve();
         }
         if (user.roleName === 'INVITADO' && action.endsWith(':read')) {
-          return;
+          return Promise.resolve();
         }
-        throw new ForbiddenException('Permiso no autorizado');
+        return Promise.reject(new ForbiddenException('Permiso no autorizado'));
       }),
     };
 
@@ -223,16 +219,18 @@ describe('AppController (e2e)', () => {
     await app.close();
   });
 
-  const signAccessToken = (roleName: string) =>
-    new EncryptJWT({
+  const signAccessToken = async (roleName: string) => {
+    const publicKeyObj = await importSPKI(testPublicKey, 'RSA-OAEP-256');
+    return new EncryptJWT({
       sub: '11111111-1111-1111-1111-111111111111',
       jti: `${roleName.toLowerCase()}-jti`,
       sid: `${roleName.toLowerCase()}-session`,
     })
-      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
       .setIssuer('master-gateway')
       .setAudience('master-gateway-clients')
       .setIssuedAt()
       .setExpirationTime('15m')
-      .encrypt(new TextEncoder().encode(jweSecret));
+      .encrypt(publicKeyObj);
+  };
 });
