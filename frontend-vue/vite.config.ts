@@ -11,11 +11,6 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      '/inventario': {
-        target: 'http://localhost:3007',
-        changeOrigin: true,
-        secure: false,
-      },
     },
   },
 })
