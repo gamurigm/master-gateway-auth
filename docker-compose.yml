@@ -18,13 +18,14 @@ services:
       retries: 5
 
   kong-db:
-    image: postgres:16-alpine
+    image: postgres:15-alpine
     container_name: kong-database
     restart: unless-stopped
     environment:
       POSTGRES_USER: kong
       POSTGRES_DB: kong
       POSTGRES_PASSWORD: kong
+      POSTGRES_HOST_AUTH_METHOD: password
     ports:
       - "5443:5432"
     volumes:
@@ -100,6 +101,20 @@ services:
     ports:
       - "1337:1337"   # Konga UI
 
+  opa:
+    image: openpolicyagent/opa:latest
+    container_name: master-gateway-opa
+    restart: unless-stopped
+    command:
+      - run
+      - --server
+      - --addr=0.0.0.0:8181
+      - /policies
+    volumes:
+      - ./security/opa:/policies:ro
+    expose:
+      - "8181"
+
   backend:
     build:
       context: .
@@ -109,6 +124,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      opa:
+        condition: service_started
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -120,7 +137,8 @@ services:
       TEMP_JWT_EXPIRES_IN: 5m
       REFRESH_JWT_EXPIRES_IN: 7d
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-docker-internal-key}
-      INTERNAL_ALLOWED_SERVICES: ventas
+      INTERNAL_ALLOWED_SERVICES: ""
+      OPA_URL: http://opa:8181
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@example.com}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin12345!}
     volumes:
@@ -165,66 +183,6 @@ services:
         condition: service_healthy
     ports:
       - "${FRONTEND_VUE_PORT:-4201}:80"
-
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    container_name: master-gateway-frontend
-    restart: unless-stopped
-    depends_on:
-      backend:
-        condition: service_healthy
-    ports:
-      - "${FRONTEND_PORT:-4200}:80"
-
-  ventas:
-    build:
-      context: .
-      dockerfile: services/ventas/Dockerfile
-    container_name: master-gateway-ventas
-    restart: unless-stopped
-    depends_on:
-      backend:
-        condition: service_healthy
-    environment:
-      VENTAS_PORT: 3006
-      MASTER_VALIDATE_URL: http://backend:3000/api/internals/validate-token
-      # Debe coincidir con INTERNAL_API_KEY del backend: es la misma credencial
-      # compartida que autentica al microservicio hijo contra el Master.
-      MASTER_INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-docker-internal-key}
-      MASTER_INTERNAL_SERVICE_NAME: ventas
-      VENTAS_ALLOWED_ROLES: ADMIN,VENTAS
-      MASTER_VALIDATE_RETRY_ATTEMPTS: 3
-      MASTER_VALIDATE_RETRY_DELAY_MS: 500
-    ports:
-      - "${VENTAS_PORT:-3006}:3006"
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3006/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 10s
-
-  register-ventas:
-    image: node:24.15.0-bookworm-slim
-    container_name: master-gateway-register-ventas
-    depends_on:
-      kong:
-        condition: service_healthy
-      ventas:
-        condition: service_healthy
-    volumes:
-      - ./scripts:/scripts
-    working_dir: /scripts
-    environment:
-      KONG_ADMIN_URL: http://kong:8001
-      KONG_SERVICE_NAME: ventas-service
-      KONG_SERVICE_URL: http://ventas:3006
-      KONG_ROUTE_PATHS: /ventas,/health
-      KONG_WAIT_TIME: 15
-    command: ["node", "auto-register-kong.js"]
-    restart: "no"  # Solo se ejecuta una vez
 
   sonar-db:
     image: postgres:16-alpine

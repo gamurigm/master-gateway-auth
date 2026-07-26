@@ -10,7 +10,7 @@ coverage/
 .env.*.local
 !.env.example
 *.log
-tmp/pdfs/
+tmp/
 reports/*.json
 reports/*.md
 reports/codebert-changed-files.txt
@@ -22,6 +22,9 @@ __pycache__/
 # la clave privada: en produccion y K8s se montan desde un Secret.
 keys/
 *.pem
+
+# Servicios externos — no se versionan en este repositorio
+services/
 
 # Secretos y claves de los overlays de Kubernetes (solo se versiona el .example).
 k8s/overlays/*/secrets.env
