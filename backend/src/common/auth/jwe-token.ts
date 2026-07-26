@@ -1,26 +1,24 @@
 import { ConfigService } from '@nestjs/config';
-import { jwtDecrypt, JWTPayload } from 'jose';
+import { jwtDecrypt, JWTPayload, importPKCS8 } from 'jose';
+import { KeysService } from '../keys/keys.service';
 
 export async function decryptGatewayToken(
   token: string,
   configService: ConfigService,
+  keysService: KeysService,
 ): Promise<JWTPayload> {
-  const jweSecret = configService.get<string>('JWE_SECRET');
-  if (!jweSecret) {
-    throw new Error('JWE_SECRET no configurado');
-  }
-
-  const { payload } = await jwtDecrypt(
-    token,
-    new TextEncoder().encode(jweSecret),
-    {
-      issuer: configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
-      audience:
-        configService.get<string>('JWT_AUDIENCE') ?? 'master-gateway-clients',
-      keyManagementAlgorithms: ['dir'],
-      contentEncryptionAlgorithms: ['A256GCM'],
-    },
+  const privateKey = await importPKCS8(
+    keysService.getPrivateKey(),
+    'RSA-OAEP-256',
   );
+
+  const { payload } = await jwtDecrypt(token, privateKey, {
+    issuer: configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
+    audience:
+      configService.get<string>('JWT_AUDIENCE') ?? 'master-gateway-clients',
+    keyManagementAlgorithms: ['RSA-OAEP-256'],
+    contentEncryptionAlgorithms: ['A256GCM'],
+  });
 
   return payload;
 }

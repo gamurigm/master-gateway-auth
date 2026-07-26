@@ -7,18 +7,30 @@ const DEVELOPMENT_DEFAULTS: Record<string, string> = {
   JWT_AUDIENCE: 'master-gateway-clients',
   JWT_PRIVATE_KEY_PATH: './keys/private.pem',
   JWT_PUBLIC_KEY_PATH: './keys/public.pem',
-  JWE_SECRET: 'change-me-jwe-secret-32-bytes!!!',
   INTERNAL_API_KEY: 'change-me-internal-key',
-  INTERNAL_ALLOWED_SERVICES: 'ventas,inventario',
+  INTERNAL_ALLOWED_SERVICES: '',
   OPA_URL: 'http://localhost:8181',
+};
+
+const PRODUCTION_SAFE_DEFAULTS: Record<string, string> = {
+  PORT: '3000',
+  JWT_ISSUER: 'master-gateway',
+  JWT_AUDIENCE: 'master-gateway-clients',
+  JWT_PRIVATE_KEY_PATH: './keys/private.pem',
+  JWT_PUBLIC_KEY_PATH: './keys/public.pem',
+  INTERNAL_ALLOWED_SERVICES: '',
+  FRONTEND_ORIGIN: 'http://localhost:4200',
 };
 
 const REQUIRED_KEYS = [
   'DATABASE_URL',
   'INTERNAL_API_KEY',
-  'INTERNAL_ALLOWED_SERVICES',
-  'JWE_SECRET',
   'OPA_URL',
+] as const;
+
+const CHANGE_ME_UNSAFE_KEYS = [
+  'INTERNAL_API_KEY',
+  'DATABASE_URL',
 ] as const;
 
 export function validateEnv(config: Record<string, unknown>) {
@@ -27,8 +39,12 @@ export function validateEnv(config: Record<string, unknown>) {
   const isProduction = nodeEnv === 'production';
   const next: Record<string, unknown> = { ...config, NODE_ENV: nodeEnv };
 
-  for (const [key, value] of Object.entries(DEVELOPMENT_DEFAULTS)) {
-    next[key] = config[key] ?? (isProduction ? undefined : value);
+  const defaults = isProduction ? PRODUCTION_SAFE_DEFAULTS : DEVELOPMENT_DEFAULTS;
+  for (const [key, value] of Object.entries(defaults)) {
+    const incoming = next[key];
+    if (incoming === undefined || incoming === null || incoming === '') {
+      next[key] = value;
+    }
   }
 
   for (const key of REQUIRED_KEYS) {
@@ -36,15 +52,17 @@ export function validateEnv(config: Record<string, unknown>) {
     if (typeof value !== 'string' || value.trim().length === 0) {
       throw new Error(`Missing required environment variable: ${key}`);
     }
-
-    if (isProduction && value.startsWith('change-me')) {
-      throw new Error(`Unsafe default secret configured in production: ${key}`);
-    }
   }
 
-  if (Buffer.byteLength(next['JWE_SECRET'] as string, 'utf8') !== 32) {
-    throw new Error('JWE_SECRET must be exactly 32 bytes for A256GCM');
+  if (isProduction) {
+    for (const key of CHANGE_ME_UNSAFE_KEYS) {
+      const value = next[key];
+      if (typeof value === 'string' && value.startsWith('change-me')) {
+        throw new Error(`Unsafe default secret configured in production: ${key}`);
+      }
+    }
   }
 
   return next;
 }
+

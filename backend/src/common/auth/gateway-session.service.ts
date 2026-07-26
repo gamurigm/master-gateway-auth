@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Estado } from '@prisma/client';
 import type { JWTPayload } from 'jose';
+import { KeysService } from '../keys/keys.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedUser } from './authenticated-user';
 import { decryptGatewayToken } from './jwe-token';
@@ -17,6 +18,7 @@ export class GatewaySessionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly keysService: KeysService,
   ) {}
 
   async resolveAccessToken(token: string): Promise<AuthenticatedUser> {
@@ -55,10 +57,7 @@ export class GatewaySessionService {
   private async decryptAccessToken(token: string) {
     let payload: AccessTokenPayload;
     try {
-      payload = (await decryptGatewayToken(
-        token,
-        this.configService,
-      )) as AccessTokenPayload;
+      payload = await decryptGatewayToken(token, this.configService, this.keysService);
     } catch {
       throw new UnauthorizedException('Token invalido o expirado');
     }

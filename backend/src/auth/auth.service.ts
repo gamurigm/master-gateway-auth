@@ -8,10 +8,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { EncryptJWT } from 'jose';
+import { EncryptJWT, importSPKI } from 'jose';
 import { createHash, randomUUID } from 'node:crypto';
 import { GatewaySessionService } from '../common/auth/gateway-session.service';
 import { decryptGatewayToken } from '../common/auth/jwe-token';
+import { KeysService } from '../common/keys/keys.service';
 import { omitPassword } from '../common/utils/omit-password';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
@@ -38,7 +39,6 @@ type SessionTokens = {
   role: { id: string; name: string };
 };
 
-
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -48,6 +48,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly gatewaySessionService: GatewaySessionService,
+    private readonly keysService: KeysService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -298,7 +299,8 @@ export class AuthService {
     }
 
     try {
-      const session = await this.gatewaySessionService.resolveAccessToken(token);
+      const session =
+        await this.gatewaySessionService.resolveAccessToken(token);
 
       return {
         valid: true,
@@ -330,6 +332,7 @@ export class AuthService {
       const payload = (await decryptGatewayToken(
         refreshToken,
         this.configService,
+        this.keysService,
       )) as GatewayTokenPayload;
       if (!payload.sub || !payload.jti) {
         throw new Error('Refresh token incompleto');
@@ -348,45 +351,40 @@ export class AuthService {
     const accessJti = randomUUID();
     const refreshJti = randomUUID();
 
-    const jweSecret = this.configService.get<string>('JWE_SECRET');
-    if (!jweSecret) {
-      throw new Error('JWE_SECRET no configurado');
-    }
+    const publicKey = await importSPKI(
+      this.keysService.getPublicKey(),
+      'RSA-OAEP-256',
+    );
 
-    const secret = new TextEncoder().encode(jweSecret);
+    const encryptOptions = {
+      issuer: this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
+      audience:
+        this.configService.get<string>('JWT_AUDIENCE') ??
+        'master-gateway-clients',
+    };
 
     const accessToken = await new EncryptJWT({
       sub: userId,
       jti: accessJti,
       sid: refreshJti,
     } satisfies GatewayTokenPayload)
-      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
       .setIssuedAt()
       .setExpirationTime('15m')
-      .setIssuer(
-        this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
-      )
-      .setAudience(
-        this.configService.get<string>('JWT_AUDIENCE') ??
-          'master-gateway-clients',
-      )
-      .encrypt(secret);
+      .setIssuer(encryptOptions.issuer)
+      .setAudience(encryptOptions.audience)
+      .encrypt(publicKey);
 
     const refreshToken = await new EncryptJWT({
       sub: userId,
       jti: refreshJti,
     } satisfies GatewayTokenPayload)
-      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
       .setIssuedAt()
       .setExpirationTime('7d')
-      .setIssuer(
-        this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
-      )
-      .setAudience(
-        this.configService.get<string>('JWT_AUDIENCE') ??
-          'master-gateway-clients',
-      )
-      .encrypt(secret);
+      .setIssuer(encryptOptions.issuer)
+      .setAudience(encryptOptions.audience)
+      .encrypt(publicKey);
 
     const expiresAt = this.addDays(new Date(), 7);
 
@@ -418,12 +416,28 @@ export class AuthService {
   }
 
   private isAllowedInternalService(serviceName: string | undefined) {
-    const allowedServices = (process.env['INTERNAL_ALLOWED_SERVICES'] ?? '')
+    if (!serviceName || serviceName.trim().length === 0) {
+      return false;
+    }
+
+    const allowlistRaw = (
+      process.env['INTERNAL_ALLOWED_SERVICES'] ?? ''
+    ).trim();
+
+    if (allowlistRaw.length === 0) {
+      return true;
+    }
+
+    const allowedServices = allowlistRaw
       .split(',')
-      .map((service) => service.trim())
+      .map((s) => s.trim())
       .filter(Boolean);
 
-    return Boolean(serviceName && allowedServices.includes(serviceName));
+    if (allowedServices.length === 0) {
+      return true;
+    }
+
+    return allowedServices.includes(serviceName);
   }
 
   private hashIdentifier(value: string) {
