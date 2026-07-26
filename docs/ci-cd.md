@@ -110,8 +110,6 @@ El workflow `.github/workflows/ci.yml` ejecuta:
 - Build backend.
 - Tests unitarios backend.
 - Tests e2e backend.
-- Build y tests de `ventas`.
-- Build y tests de `inventario`.
 - Type check y build frontend.
 - SonarQube Community en contenedores Docker solo en `main`.
 - Espera y aplica el Quality Gate antes del despliegue; solo `OK` permite continuar.

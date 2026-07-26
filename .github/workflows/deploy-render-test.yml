@@ -27,10 +27,6 @@ jobs:
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
           RENDER_DATABASE_ID: ${{ secrets.RENDER_DATABASE_ID }}
           FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
-          JWE_SECRET: ${{ secrets.JWE_SECRET }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          TEMP_JWT_SECRET: ${{ secrets.TEMP_JWT_SECRET }}
-          REFRESH_JWT_SECRET: ${{ secrets.REFRESH_JWT_SECRET }}
           INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
           OPA_URL: ${{ vars.OPA_URL }}
           SEED_ADMIN_EMAIL: ${{ vars.SEED_ADMIN_EMAIL }}
