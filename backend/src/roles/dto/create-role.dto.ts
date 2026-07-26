@@ -1,12 +1,4 @@
-import {
-  ArrayUnique,
-  IsArray,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Matches,
-  MaxLength,
-} from 'class-validator';
+import { IsOptional, IsString, MaxLength, Matches } from 'class-validator';
 import { Sanitize } from '../../common/decorators/sanitize.decorator';
 
 export class CreateRoleDto {
@@ -23,10 +15,4 @@ export class CreateRoleDto {
   @IsString()
   @MaxLength(255)
   description?: string;
-
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @IsUUID('4', { each: true })
-  permissionIds?: string[];
 }

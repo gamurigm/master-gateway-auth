@@ -3,7 +3,7 @@
 | Servicio | Root Directory | Build Command | Start Command | Publish Directory | Variables |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Frontend** | `.` | `npm ci && npm run build:frontend` | N/A | `frontend/dist/frontend/browser` | No runtime. La URL de API debe quedar embebida en `frontend/src/environments/environment.ts` con la URL pública del Backend |
-| **Backend** | `.` | `npm ci --include=dev && npm run build:backend` | `npm run start:backend:prod` | N/A | `DATABASE_URL`, `FRONTEND_ORIGIN`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `TEMP_JWT_SECRET`, `TEMP_JWT_EXPIRES_IN`, `REFRESH_JWT_SECRET`, `REFRESH_JWT_EXPIRES_IN`, `INTERNAL_API_KEY`, `INTERNAL_ALLOWED_SERVICES`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `NODE_ENV=production` |
+| **Backend** | `.` | `npm ci --include=dev && npm run build:backend` | `npm run start:backend:prod` | N/A | `DATABASE_URL`, `FRONTEND_ORIGIN`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`, `INTERNAL_API_KEY`, `INTERNAL_ALLOWED_SERVICES`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `NODE_ENV=production` |
 
 ## Notas finales
 

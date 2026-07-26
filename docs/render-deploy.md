@@ -30,16 +30,9 @@ error del backend cuando una respuesta no es 2xx.
 ## Variables obligatorias en Render
 
 `DATABASE_URL`, `FRONTEND_ORIGIN`, `JWE_SECRET`, `JWT_SECRET`,
-`TEMP_JWT_SECRET`, `REFRESH_JWT_SECRET`, `INTERNAL_API_KEY`, `OPA_URL`, además de
+`TEMP_JWT_SECRET`, `REFRESH_JWT_SECRET`, `INTERNAL_API_KEY`, además de
 `JWT_ISSUER=master-gateway`, `JWT_AUDIENCE=master-gateway-clients` e
-`INTERNAL_ALLOWED_SERVICES=ventas,inventario`.
-
-`OPA_URL` debe apuntar al servicio OPA que expone
-`/v1/data/master_gateway/authz/allow`. En local el valor por defecto es
-`http://localhost:8181`. Si se usa `render.yaml` como Blueprint, el backend lo
-toma del servicio privado `master-gateway-opa`; si se usa el workflow que
-configura un servicio existente por API, debe existir `vars.OPA_URL` en GitHub
-Actions antes del deploy.
+`INTERNAL_ALLOWED_SERVICES=ventas`.
 
 El workflow y `scripts/configure-render-environment.sh` actualizan estas
 variables antes de crear el deploy. Los secretos deben existir en GitHub como

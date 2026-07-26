@@ -17,6 +17,9 @@ RUN pip install --upgrade pip \
     && pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 \
     && pip install -r requirements.txt
 
-COPY security/codebert-sast/codebert_sast.py ./codebert_sast.py
+# Se copian todos los .py del scanner, no solo el entrypoint: codebert_sast.py
+# importa cwe_catalog. Copiar archivo por archivo hacia que anadir un modulo
+# nuevo rompiera la imagen en CI sin fallar en local.
+COPY security/codebert-sast/*.py ./
 
 ENTRYPOINT ["python", "/scanner/codebert_sast.py"]

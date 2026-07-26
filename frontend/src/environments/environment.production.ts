@@ -1,4 +1,3 @@
-﻿export const environment = {
-  apiUrl: "/api",
-  inventoryApiUrl: "/inventario",
+export const environment = {
+  apiUrl: "https://master-gateway-auth.onrender.com/api",
 };

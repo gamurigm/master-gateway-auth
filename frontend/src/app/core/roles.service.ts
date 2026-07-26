@@ -52,19 +52,4 @@ export class RolesService {
   unassignMenu(roleId: string, menuId: string): Observable<{ success: boolean }> {
     return this.http.delete<{ success: boolean }>(`${this.apiUrl}/roles/${roleId}/menus/${menuId}`);
   }
-
-  assignPermission(roleId: string, permissionId: string): Observable<unknown> {
-    return this.http.post(`${this.apiUrl}/roles/${roleId}/permissions`, {
-      permissionId,
-    });
-  }
-
-  unassignPermission(
-    roleId: string,
-    permissionId: string,
-  ): Observable<{ success: boolean }> {
-    return this.http.delete<{ success: boolean }>(
-      `${this.apiUrl}/roles/${roleId}/permissions/${permissionId}`,
-    );
-  }
 }

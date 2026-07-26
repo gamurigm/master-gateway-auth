@@ -1,0 +1,23 @@
+# Service placeholder para "inventario".
+#
+# El nginx.conf del frontend (compartido con docker-compose) declara un upstream
+# `proxy_pass http://inventario:3007/inventario/`. nginx resuelve los upstreams
+# al ARRANCAR, así que si el nombre `inventario` no existe en DNS, el contenedor
+# del frontend muere con "host not found in upstream".
+#
+# Este Service sin selector le da un registro DNS estable para que nginx arranque.
+# No tiene endpoints: las peticiones a /inventario/ (ruta de demo no usada en el
+# flujo principal) devolverían 502, pero el resto del SPA y el proxy /api hacia
+# el backend funcionan con normalidad. Si más adelante se despliega un servicio
+# de inventario real, basta con darle este mismo nombre.
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventario
+  labels:
+    app: inventario
+spec:
+  ports:
+    - name: http
+      port: 3007
+      targetPort: 3007

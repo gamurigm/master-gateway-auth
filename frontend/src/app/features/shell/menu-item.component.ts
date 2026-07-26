@@ -1,4 +1,4 @@
-import { CommonModule } from "@angular/common";
+﻿import { CommonModule } from "@angular/common";
 import { Component, Input } from "@angular/core";
 import { RouterLink, RouterLinkActive } from "@angular/router";
 import { MenuNode } from "../../core/api.models";
@@ -8,7 +8,7 @@ import { MenuNode } from "../../core/api.models";
   standalone: true,
   imports: [CommonModule, RouterLink, RouterLinkActive],
   template: `
-    <a *ngIf="node.url && isInternal(node.url)" [routerLink]="node.url" routerLinkActive="active" class="menu-link">{{ node.name }}</a>
+    <a *ngIf="node.url && isInternal(node.url)" [routerLink]="node.url" class="menu-link">{{ node.name }}</a>
     <a *ngIf="node.url && !isInternal(node.url)" [href]="node.url" class="menu-link" target="_self" rel="noreferrer">
       {{ node.name }}
     </a>

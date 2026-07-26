@@ -1,0 +1,48 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: master-gateway
+
+resources:
+  - ../../base
+  - hpa-backend.yaml
+
+# En producción los Secrets NO se generan desde archivos: se gestionan fuera de
+# git (Sealed Secrets, External Secrets Operator, Vault, o `kubectl create
+# secret` desde el pipeline con valores de GitHub Actions). Por eso aquí no hay
+# secretGenerator; se asume que master-gateway-secrets y master-gateway-keys ya
+# existen en el namespace.
+
+patches:
+  # Alta disponibilidad del Master: varias réplicas detrás del Service. Funciona
+  # gracias a que todas comparten el par de claves RSA del Secret.
+  - target:
+      kind: Deployment
+      name: backend
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: ventas
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: frontend
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  # El probe de servicios externos NO debe alcanzar redes privadas en un cluster
+  # expuesto: se desactiva el bypass anti-SSRF.
+  - target:
+      kind: ConfigMap
+      name: master-gateway-config
+    patch: |
+      - op: replace
+        path: /data/ALLOW_PRIVATE_PROBE_TARGETS
+        value: "false"

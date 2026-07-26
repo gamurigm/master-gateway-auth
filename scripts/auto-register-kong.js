@@ -137,49 +137,6 @@ async function registerRoutes() {
   }
 }
 
-// Registrar plugin Request Transformer para reescribir Authorization
-async function registerRequestTransformerPlugin() {
-  const internalApiKey = process.env.INTERNAL_API_KEY;
-  if (!internalApiKey) {
-    console.warn('⚠️  INTERNAL_API_KEY no definida, omitiendo plugin Request Transformer');
-    return;
-  }
-
-  const pluginName = 'request-transformer';
-  const pluginConfig = {
-    name: pluginName,
-    config: {
-      remove: {
-        headers: ['Authorization'],
-      },
-      add: {
-        headers: [`Authorization:Bearer ${internalApiKey}`],
-      },
-    },
-  };
-
-  const routes = config.routePaths.map(p => `${config.serviceName}-route-${p.replaceAll('/', '-')}`);
-  let existing = null;
-
-  for (const routeName of routes) {
-    console.log(`🔍 Verificando plugin "${pluginName}" en ruta "${routeName}"...`);
-    const getRes = await request('GET', `/routes/${routeName}/plugins`);
-    const plugins = getRes.data?.data || [];
-    existing = plugins.find((p) => p.name === pluginName);
-    if (existing) break;
-  }
-
-  if (existing) {
-    console.log(`✅ Plugin "${pluginName}" ya existe. Actualizando...`);
-    await request('PATCH', `/plugins/${existing.id}`, pluginConfig);
-    console.log(`✅ Plugin "${pluginName}" actualizado correctamente`);
-  } else {
-    console.log(`📝 Creando plugin "${pluginName}" en ruta "${routes[0]}"...`);
-    await request('POST', `/routes/${routes[0]}/plugins`, pluginConfig);
-    console.log(`✅ Plugin "${pluginName}" creado correctamente`);
-  }
-}
-
 // Función principal
 async function main() {
   console.log('🚀 Iniciando Auto-Registration para Kong...');
@@ -196,16 +153,15 @@ async function main() {
   try {
     await registerService();
     await registerRoutes();
-    await registerRequestTransformerPlugin();
     console.log('');
     console.log('🎉 Auto-Registration completado exitosamente!');
     console.log('');
     console.log('✅ Servicio registrado en Kong:');
+    console.log(`   - Nombre: ${config.serviceName}`);
     const routeLines = config.routePaths
       .map(p => `   - http://localhost:8000${p}/*`)
       .join('\n');
     console.log(`   - Rutas:\n${routeLines}`);
-    console.log(`   - Plugin Request Transformer activo (Authorization reescrita)`);
   } catch (error) {
     console.error('❌ Error en Auto-Registration:', error);
     process.exit(1);

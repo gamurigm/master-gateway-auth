@@ -1,51 +1,53 @@
-﻿import { PrismaClient, Estado } from '@prisma/client';
+import { PrismaClient, Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
-import {
-  ADMIN_PERMISSION_CODES,
-  ALL_PERMISSION_CODES,
-  GUEST_PERMISSION_CODES,
-  PERMISSIONS,
-  SYSTEM_ROLES,
-} from '../src/common/policy/permission-catalog';
 
 const prisma = new PrismaClient();
 
+// UUID v4 generados aleatoriamente con crypto.randomUUID().
+// Son EXACTAMENTE los mismos que usa prisma/seeds/seed.sql, de modo que ambos
+// caminos de siembra convergen al mismo estado.
+//
+// Se descartaron los IDs anteriores (11111111-1111-4111-8111-..., aaaaaaa1-...):
+// eran v4 sintacticamente validos, pero con un patron fijo en lugar de aleatorios.
 const ids = {
-  adminUser: '11111111-1111-4111-8111-111111111111',
-  operatorAdminUser: '11111112-1111-4111-8111-111111111112',
-  demoUser: '22222222-2222-4222-8222-222222222222',
-  salesUser: '33333333-3333-4333-8333-333333333333',
-  inventoryUser: '33333334-3333-4333-8333-333333333334',
-  superAdminRole: '44444440-4444-4444-8444-444444444440',
-  adminRole: '44444444-4444-4444-8444-444444444444',
-  guestRole: '55555555-5555-4555-8555-555555555555',
-  salesRole: '66666666-6666-4666-8666-666666666666',
-  inventoryRole: '66666667-6666-4666-8666-666666666667',
-  adminModule: '77777777-7777-4777-8777-777777777777',
-  salesModule: '88888888-8888-4888-8888-888888888888',
-  inventoryModule: '88888889-8888-4888-8888-888888888889',
-  adminMenu: '99999999-9999-4999-8999-999999999999',
-  usersMenu: 'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
-  rolesMenu: 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
-  modulesMenu: 'aaaaaaa3-aaaa-4aaa-8aaa-aaaaaaaaaaa3',
-  menusMenu: 'aaaaaaa4-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
-  salesMenu: 'bbbbbbb1-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
-  ordersMenu: 'bbbbbbb2-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
-  inventoryMenu: 'ccccccc1-cccc-4ccc-8ccc-ccccccccccc1',
-  productsMenu: 'ccccccc2-cccc-4ccc-8ccc-ccccccccccc2',
+  adminUser: '3d5f0471-39fe-42b8-be26-bc6569492279',
+  demoUser: 'dae15021-602e-493d-b5c3-23882e7c529c',
+  salesUser: '87ef858a-1961-40b6-91f5-3a6871ae3ac4',
+  adminRole: 'bed7be1f-4d90-4847-bf54-92b65570870a',
+  userRole: '11cadc3c-e833-4fdc-844b-f1c40f947543',
+  salesRole: '85fcd9ad-c9f7-409e-85b8-57b7cc2ae5a6',
+  adminModule: '3d1fbdb3-a863-4dfc-a426-3c9953e1bbbf',
+  salesModule: 'c43cd32f-334d-4296-a72d-e3a08082f368',
+  adminMenu: '8322bc38-3b81-4355-b9af-60045932a041',
+  usersMenu: '32b8334c-1ad8-443a-bffa-d6558538614b',
+  rolesMenu: '36af61c9-33ad-44ec-83cb-2589c57043aa',
+  modulesMenu: '620a447e-63e0-4b1f-aede-adeccb68efc9',
+  menusMenu: 'b76a24c8-620f-44e3-af3f-5226e343a6c6',
+  extServicesMenu: 'ef6c1437-9347-4ba7-acdb-5b7911b3e446',
+  salesMenu: '8936f02d-2418-4677-ab7e-9468c761282f',
+  ordersMenu: '3c06bd5a-b838-4b39-9928-dc5f86a79806',
 } as const;
 
-async function cleanInvalidLegacyMenus() {
-  const legacyIds = [
-    '00000000-0000-0000-0000-000000000001',
-    '00000000-0000-0000-0000-000000000002',
-    '00000000-0000-0000-0000-000000000003',
-    '00000000-0000-0000-0000-000000000004',
-    '00000000-0000-0000-0000-000000000005',
-  ];
+// IDs de demo de generaciones anteriores. Sin esta limpieza, una base de datos
+// ya sembrada conservaria los menus antiguos como huerfanos junto a los nuevos.
+const LEGACY_MENU_IDS = [
+  '00000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000003',
+  '00000000-0000-0000-0000-000000000004',
+  '00000000-0000-0000-0000-000000000005',
+  '99999999-9999-4999-8999-999999999999',
+  'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+  'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+  'aaaaaaa3-aaaa-4aaa-8aaa-aaaaaaaaaaa3',
+  'aaaaaaa4-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
+  'bbbbbbb1-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+  'bbbbbbb2-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
+];
 
-  await prisma.roleMenu.deleteMany({ where: { menuId: { in: legacyIds } } });
-  await prisma.menu.deleteMany({ where: { id: { in: legacyIds } } });
+async function cleanInvalidLegacyMenus() {
+  await prisma.roleMenu.deleteMany({ where: { menuId: { in: LEGACY_MENU_IDS } } });
+  await prisma.menu.deleteMany({ where: { id: { in: LEGACY_MENU_IDS } } });
 }
 
 async function main() {
@@ -57,11 +59,9 @@ async function main() {
 
   if (process.env.SEED_RESET === 'true') {
     await prisma.refreshToken.deleteMany();
-    await prisma.rolePermission.deleteMany();
     await prisma.roleMenu.deleteMany();
     await prisma.roleModule.deleteMany();
     await prisma.userRole.deleteMany();
-    await prisma.permission.deleteMany();
     await prisma.menu.deleteMany();
     await prisma.systemModule.deleteMany();
     await prisma.role.deleteMany();
@@ -77,12 +77,6 @@ async function main() {
     create: { id: ids.adminUser, email: adminEmail, passwordHash, firstName: 'Admin', lastName: 'Master' },
   });
 
-  const operatorAdmin = await prisma.user.upsert({
-    where: { email: 'admin-operador@example.com' },
-    update: { id: ids.operatorAdminUser, estado: Estado.ACTIVO, passwordHash: demoPasswordHash, firstName: 'Admin', lastName: 'Operador' },
-    create: { id: ids.operatorAdminUser, email: 'admin-operador@example.com', passwordHash: demoPasswordHash, firstName: 'Admin', lastName: 'Operador' },
-  });
-
   const demoUser = await prisma.user.upsert({
     where: { email: 'demo@example.com' },
     update: { id: ids.demoUser, estado: Estado.ACTIVO, passwordHash: demoPasswordHash, firstName: 'Usuario', lastName: 'Demo' },
@@ -95,114 +89,41 @@ async function main() {
     create: { id: ids.salesUser, email: 'ventas@example.com', passwordHash: demoPasswordHash, firstName: 'Usuario', lastName: 'Ventas' },
   });
 
-  const inventoryUser = await prisma.user.upsert({
-    where: { email: 'inventario@example.com' },
-    update: { id: ids.inventoryUser, estado: Estado.ACTIVO, passwordHash: demoPasswordHash, firstName: 'Usuario', lastName: 'Inventario' },
-    create: { id: ids.inventoryUser, email: 'inventario@example.com', passwordHash: demoPasswordHash, firstName: 'Usuario', lastName: 'Inventario' },
-  });
-
-  const superAdminRole = await prisma.role.upsert({ where: { id: ids.superAdminRole }, update: { name: SYSTEM_ROLES.SUPERADMIN, description: 'Control total, incluido borrado fisico', estado: Estado.ACTIVO }, create: { id: ids.superAdminRole, name: SYSTEM_ROLES.SUPERADMIN, description: 'Control total, incluido borrado fisico' } });
-  const adminRole = await prisma.role.upsert({ where: { id: ids.adminRole }, update: { name: SYSTEM_ROLES.ADMIN, description: 'Administrador sin borrado fisico', estado: Estado.ACTIVO }, create: { id: ids.adminRole, name: SYSTEM_ROLES.ADMIN, description: 'Administrador sin borrado fisico' } });
-  const guestRole = await prisma.role.upsert({ where: { id: ids.guestRole }, update: { name: SYSTEM_ROLES.INVITADO, description: 'Acceso de solo lectura', estado: Estado.ACTIVO }, create: { id: ids.guestRole, name: SYSTEM_ROLES.INVITADO, description: 'Acceso de solo lectura' } });
+  const adminRole = await prisma.role.upsert({ where: { name: 'ADMIN' }, update: { id: ids.adminRole, estado: Estado.ACTIVO }, create: { id: ids.adminRole, name: 'ADMIN', description: 'Administrador del Master Gateway' } });
+  const userRole = await prisma.role.upsert({ where: { name: 'USER' }, update: { id: ids.userRole, estado: Estado.ACTIVO }, create: { id: ids.userRole, name: 'USER', description: 'Usuario estándar de consulta' } });
   const salesRole = await prisma.role.upsert({ where: { name: 'VENTAS' }, update: { id: ids.salesRole, estado: Estado.ACTIVO }, create: { id: ids.salesRole, name: 'VENTAS', description: 'Acceso al servicio de ventas' } });
-  const inventoryRole = await prisma.role.upsert({ where: { name: 'INVENTARIO' }, update: { id: ids.inventoryRole, estado: Estado.ACTIVO }, create: { id: ids.inventoryRole, name: 'INVENTARIO', description: 'Acceso al servicio de inventario' } });
 
-  for (const [userId, roleId] of [
-    [admin.id, superAdminRole.id],
-    [operatorAdmin.id, adminRole.id],
-    [demoUser.id, guestRole.id],
-    [salesUser.id, salesRole.id],
-    [inventoryUser.id, inventoryRole.id],
-  ] as const) {
+  for (const [userId, roleId] of [[admin.id, adminRole.id], [demoUser.id, userRole.id], [salesUser.id, salesRole.id]] as const) {
     await prisma.userRole.upsert({ where: { userId_roleId: { userId, roleId } }, update: { estado: Estado.ACTIVO }, create: { userId, roleId, estado: Estado.ACTIVO, createdBy: admin.id } });
   }
 
-  const adminModule = await prisma.systemModule.upsert({ where: { code: 'ADMIN' }, update: { id: ids.adminModule, estado: Estado.ACTIVO }, create: { id: ids.adminModule, code: 'ADMIN', name: 'Administracion', description: 'Gestion de identidad, roles, modulos y menus', createdBy: admin.id } });
-  const salesModule = await prisma.systemModule.upsert({ where: { code: 'VENTAS' }, update: { id: ids.salesModule, estado: Estado.ACTIVO }, create: { id: ids.salesModule, code: 'VENTAS', name: 'Ventas', description: 'Operacion de pedidos y ventas', createdBy: admin.id } });
-  const inventoryModule = await prisma.systemModule.upsert({ where: { code: 'INVENTARIO' }, update: { id: ids.inventoryModule, estado: Estado.ACTIVO }, create: { id: ids.inventoryModule, code: 'INVENTARIO', name: 'Inventario', description: 'Operacion de productos e inventario', createdBy: admin.id } });
+  const adminModule = await prisma.systemModule.upsert({ where: { code: 'ADMIN' }, update: { id: ids.adminModule, estado: Estado.ACTIVO }, create: { id: ids.adminModule, code: 'ADMIN', name: 'Administración', description: 'Gestión de identidad, roles, módulos y menús', createdBy: admin.id } });
+  const salesModule = await prisma.systemModule.upsert({ where: { code: 'VENTAS' }, update: { id: ids.salesModule, estado: Estado.ACTIVO }, create: { id: ids.salesModule, code: 'VENTAS', name: 'Ventas', description: 'Operación de pedidos y ventas', createdBy: admin.id } });
 
-  for (const [roleId, moduleId] of [
-    [superAdminRole.id, adminModule.id],
-    [superAdminRole.id, salesModule.id],
-    [superAdminRole.id, inventoryModule.id],
-    [adminRole.id, adminModule.id],
-    [adminRole.id, salesModule.id],
-    [adminRole.id, inventoryModule.id],
-    [guestRole.id, adminModule.id],
-    [guestRole.id, salesModule.id],
-    [guestRole.id, inventoryModule.id],
-    [salesRole.id, salesModule.id],
-    [inventoryRole.id, inventoryModule.id],
-  ] as const) {
+  for (const [roleId, moduleId] of [[adminRole.id, adminModule.id], [adminRole.id, salesModule.id], [salesRole.id, salesModule.id]] as const) {
     await prisma.roleModule.upsert({ where: { roleId_moduleId: { roleId, moduleId } }, update: { estado: Estado.ACTIVO }, create: { roleId, moduleId, estado: Estado.ACTIVO, createdBy: admin.id } });
   }
 
   const menus = [
-    { id: ids.adminMenu, name: 'Administracion', url: undefined, icon: 'settings', order: 0, moduleId: adminModule.id, parentId: undefined },
+    { id: ids.adminMenu, name: 'Administración', url: undefined, icon: 'settings', order: 0, moduleId: adminModule.id, parentId: undefined },
     { id: ids.usersMenu, name: 'Usuarios', url: '/app/users', icon: 'users', order: 1, moduleId: adminModule.id, parentId: ids.adminMenu },
     { id: ids.rolesMenu, name: 'Roles', url: '/app/roles', icon: 'shield', order: 2, moduleId: adminModule.id, parentId: ids.adminMenu },
-    { id: ids.modulesMenu, name: 'Modulos', url: '/app/modules', icon: 'boxes', order: 3, moduleId: adminModule.id, parentId: ids.adminMenu },
-    { id: ids.menusMenu, name: 'Menus', url: '/app/menus', icon: 'menu', order: 4, moduleId: adminModule.id, parentId: ids.adminMenu },
+    { id: ids.modulesMenu, name: 'Módulos', url: '/app/modules', icon: 'boxes', order: 3, moduleId: adminModule.id, parentId: ids.adminMenu },
+    { id: ids.menusMenu, name: 'Menús', url: '/app/menus', icon: 'menu', order: 4, moduleId: adminModule.id, parentId: ids.adminMenu },
+    { id: ids.extServicesMenu, name: 'Servicios externos', url: '/app/external-services', icon: 'plug', order: 5, moduleId: adminModule.id, parentId: ids.adminMenu },
     { id: ids.salesMenu, name: 'Ventas', url: '/app/sales', icon: 'shopping-cart', order: 1, moduleId: salesModule.id, parentId: undefined },
     { id: ids.ordersMenu, name: 'Pedidos', url: '/ventas/ordenes', icon: 'receipt', order: 2, moduleId: salesModule.id, parentId: ids.salesMenu },
-    { id: ids.inventoryMenu, name: 'Inventario', url: '/app/inventario', icon: 'boxes', order: 1, moduleId: inventoryModule.id, parentId: undefined },
-    { id: ids.productsMenu, name: 'Productos', url: '/app/inventario', icon: 'package', order: 2, moduleId: inventoryModule.id, parentId: ids.inventoryMenu },
   ];
 
   for (const menuData of menus) {
     const menu = await prisma.menu.upsert({ where: { id: menuData.id }, update: { ...menuData, estado: Estado.ACTIVO }, create: { ...menuData, estado: Estado.ACTIVO, createdBy: admin.id } });
-    const roleIds = menuData.moduleId === salesModule.id
-      ? [superAdminRole.id, adminRole.id, guestRole.id, salesRole.id]
-      : menuData.moduleId === inventoryModule.id
-        ? [superAdminRole.id, adminRole.id, guestRole.id, inventoryRole.id]
-        : [superAdminRole.id, adminRole.id, guestRole.id];
-
+    const roleIds = menuData.moduleId === salesModule.id ? [adminRole.id, salesRole.id] : [adminRole.id];
     for (const roleId of roleIds) {
       await prisma.roleMenu.upsert({ where: { roleId_menuId: { roleId, menuId: menu.id } }, update: { estado: Estado.ACTIVO }, create: { roleId, menuId: menu.id, estado: Estado.ACTIVO, createdBy: admin.id } });
     }
   }
 
-  const permissionByCode = new Map<string, { id: string }>();
-  for (const permissionData of PERMISSIONS) {
-    const permission = await prisma.permission.upsert({
-      where: { code: permissionData.code },
-      update: { ...permissionData, estado: Estado.ACTIVO, updatedBy: admin.id },
-      create: { ...permissionData, estado: Estado.ACTIVO, createdBy: admin.id },
-      select: { id: true, code: true },
-    });
-    permissionByCode.set(permission.code, permission);
-  }
-
-  const assignPermissions = async (roleId: string, permissionCodes: string[]) => {
-    for (const code of permissionCodes) {
-      const permission = permissionByCode.get(code);
-      if (!permission) {
-        throw new Error(`Permiso no encontrado en catalogo: ${code}`);
-      }
-
-      await prisma.rolePermission.upsert({
-        where: { roleId_permissionId: { roleId, permissionId: permission.id } },
-        update: { estado: Estado.ACTIVO, updatedBy: admin.id },
-        create: { roleId, permissionId: permission.id, estado: Estado.ACTIVO, createdBy: admin.id },
-      });
-    }
-  };
-
-  await assignPermissions(superAdminRole.id, ALL_PERMISSION_CODES);
-  await assignPermissions(adminRole.id, ADMIN_PERMISSION_CODES);
-  await assignPermissions(guestRole.id, GUEST_PERMISSION_CODES);
-  await assignPermissions(salesRole.id, ['sales:read']);
-  await assignPermissions(inventoryRole.id, ['inventory:read']);
-
-  console.log(JSON.stringify({ message: 'Seed completado', users: [adminEmail, 'admin-operador@example.com', 'demo@example.com', 'ventas@example.com', 'inventario@example.com'], demoPassword, uuidVersion: 'v4' }, null, 2));
+  console.log(JSON.stringify({ message: 'Seed completado', users: [adminEmail, 'demo@example.com', 'ventas@example.com'], demoPassword, uuidVersion: 'v4' }, null, 2));
 }
 
-main()
-  .catch(async (error) => {
-    console.error(error);
-    await prisma.$disconnect();
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch(async (error) => { console.error(error); await prisma.$disconnect(); process.exit(1); }).finally(async () => { await prisma.$disconnect(); });

@@ -2,7 +2,6 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { KeysModule } from '../common/keys/keys.module';
-import { GatewaySessionService } from '../common/auth/gateway-session.service';
 import { KeysService } from '../common/keys/keys.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -33,7 +32,7 @@ import { AuthService } from './auth.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, GatewaySessionService],
-  exports: [AuthService, GatewaySessionService, JwtModule],
+  providers: [AuthService],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

@@ -19,6 +19,15 @@
   --error-bg: rgba(254, 226, 226, 0.9);
   --error-text: #b91c1c;
   --error-border: #fca5a5;
+
+  /* Tokens de superficie usados por DynamicPageView y el wizard de servicios
+     externos. La app es de tema claro, así que estos valores igualan a las
+     tarjetas (.hero-section/.quick-card). Sin definirlos, esas vistas caían a
+     un fallback oscuro y el texto quedaba ilegible. */
+  --surface: rgba(255, 255, 255, 0.92);
+  --border: rgba(148, 163, 184, 0.22);
+  --bg: #ffffff;
+  --accent: #3b82f6;
 }
 
 * { box-sizing: border-box; }

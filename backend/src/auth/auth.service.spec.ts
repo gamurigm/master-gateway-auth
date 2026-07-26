@@ -5,8 +5,7 @@ import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { generateKeyPairSync } from 'node:crypto';
 import type { Algorithm } from 'jsonwebtoken';
-import { EncryptJWT, jwtDecrypt } from 'jose';
-import { GatewaySessionService } from '../common/auth/gateway-session.service';
+import { EncryptJWT, importPKCS8, importSPKI, jwtDecrypt } from 'jose';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 
@@ -14,13 +13,19 @@ const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ROLE_ID = '22222222-2222-2222-2222-222222222222';
 const EMAIL = 'admin@example.com';
 const PASSWORD = 'Admin12345!';
-const JWE_SECRET = 'test-jwe-secret-exactly-32-bytes';
+
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
   publicKeyEncoding: { type: 'spki', format: 'pem' },
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 });
+
+const keysService = {
+  getPrivateKey: () => privateKey,
+  getPublicKey: () => publicKey,
+};
+
 
 const jwtOptions = {
   privateKey,
@@ -54,8 +59,6 @@ type RefreshTokenUpdateManyArgs = {
 describe('AuthService', () => {
   let service: AuthService;
   let jwtService: JwtService;
-  let configService: ConfigService;
-  let gatewaySessionService: GatewaySessionService;
   let passwordHash: string;
 
   const prisma = {
@@ -82,20 +85,14 @@ describe('AuthService', () => {
     process.env['INTERNAL_API_KEY'] = 'test-internal-key';
     process.env['INTERNAL_ALLOWED_SERVICES'] = 'ventas';
     jwtService = new JwtService(jwtOptions);
-    configService = new ConfigService({
-      JWE_SECRET,
-      JWT_ISSUER: 'master-gateway',
-      JWT_AUDIENCE: 'master-gateway-clients',
-    });
-    gatewaySessionService = new GatewaySessionService(
-      prisma as unknown as PrismaService,
-      configService,
-    );
     service = new AuthService(
       prisma as unknown as PrismaService,
       jwtService,
-      configService,
-      gatewaySessionService,
+      new ConfigService({
+        JWT_ISSUER: 'master-gateway',
+        JWT_AUDIENCE: 'master-gateway-clients',
+      }),
+      keysService as any,
     );
     prisma.refreshToken.create.mockResolvedValue({});
     prisma.refreshToken.update.mockResolvedValue({});
@@ -158,7 +155,7 @@ describe('AuthService', () => {
     const result = await service.selectRole({ tempToken, roleId: ROLE_ID });
     const { payload: accessPayload } = await jwtDecrypt(
       result.accessToken,
-      new TextEncoder().encode(JWE_SECRET),
+      await importPKCS8(privateKey, 'RSA-OAEP-256'),
       {
         issuer: 'master-gateway',
         audience: 'master-gateway-clients',
@@ -167,25 +164,9 @@ describe('AuthService', () => {
 
     expect(accessPayload).toMatchObject({
       sub: USER_ID,
-      sid: result.refreshTokenJti,
+      roleId: ROLE_ID,
+      roleName: 'ADMIN',
     });
-    expect(accessPayload).not.toHaveProperty('roleId');
-    expect(accessPayload).not.toHaveProperty('roleName');
-
-    const { payload: refreshPayload } = await jwtDecrypt(
-      result.refreshToken,
-      new TextEncoder().encode(JWE_SECRET),
-      {
-        issuer: 'master-gateway',
-        audience: 'master-gateway-clients',
-      },
-    );
-    expect(refreshPayload).toMatchObject({
-      sub: USER_ID,
-      jti: result.refreshTokenJti,
-    });
-    expect(refreshPayload).not.toHaveProperty('roleId');
-    expect(refreshPayload).not.toHaveProperty('roleName');
     expect(result.role).toEqual({ id: ROLE_ID, name: 'ADMIN' });
     const createMock = prisma.refreshToken.create as jest.Mock<
       unknown,
@@ -280,6 +261,20 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
+  it('validateInternal rejects every request when INTERNAL_API_KEY is missing', async () => {
+    // Regresion: la comprobacion antigua era `if (expectedKey && ...)`, de modo
+    // que sin INTERNAL_API_KEY configurada cualquier peticion interna pasaba.
+    delete process.env['INTERNAL_API_KEY'];
+
+    await expect(
+      service.validateInternal(undefined, 'token', 'ventas'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    await expect(
+      service.validateInternal('cualquier-cosa', 'token', 'ventas'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('validateInternal rejects internal services outside the allowlist', async () => {
     process.env['INTERNAL_ALLOWED_SERVICES'] = 'ventas';
     await expect(
@@ -296,16 +291,6 @@ describe('AuthService', () => {
       role: { id: ROLE_ID, name: 'ADMIN' },
     });
     const session = await service.selectRole({ tempToken, roleId: ROLE_ID });
-    prisma.refreshToken.findUnique.mockResolvedValue({
-      userId: USER_ID,
-      roleId: ROLE_ID,
-      estado: Estado.ACTIVO,
-      revokedAt: null,
-      replacedByJti: null,
-      expiresAt: new Date(Date.now() + 60_000),
-      user: { estado: Estado.ACTIVO },
-      role: { id: ROLE_ID, name: 'ADMIN', estado: Estado.ACTIVO },
-    });
 
     await expect(
       service.validateInternal(
@@ -321,12 +306,13 @@ describe('AuthService', () => {
     });
   });
 
-  const createRefreshToken = (jti: string) =>
-    new EncryptJWT({ sub: USER_ID, jti })
-      .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+  const createRefreshToken = async (jti: string) =>
+    new EncryptJWT({ sub: USER_ID, roleId: ROLE_ID, roleName: 'ADMIN', jti })
+      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
       .setIssuedAt()
       .setExpirationTime('7d')
       .setIssuer('master-gateway')
       .setAudience('master-gateway-clients')
-      .encrypt(new TextEncoder().encode(JWE_SECRET));
+      .encrypt(await importSPKI(publicKey, 'RSA-OAEP-256'));
+
 });

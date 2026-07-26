@@ -8,14 +8,14 @@
       </div>
     </div>
     <nav class="sidebar-nav">
-      <template v-if="navState === 'loading'">
+      <template v-if="navState === 'loading' || navState === 'idle'">
         <div class="list-state"><div class="state-spinner" /> Cargando...</div>
       </template>
       <template v-else-if="navState === 'error'">
         <div class="error-state">
           <AppIcon name="alert-triangle" size="20" />
           <p>Error al cargar navegacion</p>
-          <button class="secondary-button" @click="loadNavigation">Reintentar</button>
+          <button class="secondary-button" @click="reload">Reintentar</button>
         </div>
       </template>
       <template v-else-if="navState === 'empty'">
@@ -25,7 +25,7 @@
         </div>
       </template>
       <ul v-else class="nav-tree">
-        <li v-for="mod in modules" :key="mod.id">
+        <li v-for="mod in menuStore.modules" :key="mod.id">
           <span class="module-group">
             <AppIcon v-if="getModuleIcon(mod)" :name="getModuleIcon(mod)" size="16" />
             <span>{{ mod.name }}</span>
@@ -46,41 +46,38 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { authService } from '../services/auth.service'
-import { menuService } from '../services/menu.service'
 import { useAuthStore } from '../stores/auth'
+import { useMenuStore } from '../stores/menu'
 import type { MenuModule } from '../types'
 import AppIcon from './AppIcon.vue'
 import MenuItem from './MenuItem.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const modules = ref<MenuModule[]>([])
-const navState = ref<'loading' | 'error' | 'empty' | 'loaded'>('loading')
+const menuStore = useMenuStore()
+
+// El estado de navegación se deriva del store: la carga y el registro de rutas
+// dinámicas viven allí, no en el componente.
+const navState = computed(() => menuStore.state)
 
 function getModuleIcon(mod: MenuModule): string {
   const first = mod.menus?.[0]
   return first?.icon || 'box'
 }
 
-async function loadNavigation() {
-  navState.value = 'loading'
-  try {
-    const { data } = await menuService.tree()
-    modules.value = data
-    navState.value = data.length ? 'loaded' : 'empty'
-  } catch {
-    navState.value = 'error'
-  }
+function reload() {
+  return menuStore.load(router, true)
 }
 
 async function handleLogout() {
   await authService.logout()
+  menuStore.reset()
   authStore.clearSession()
   router.push('/login')
 }
 
-onMounted(loadNavigation)
+onMounted(() => menuStore.load(router))
 </script>

@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: master-gateway
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - postgres.yaml
+  - db-migrate-job.yaml
+  - backend.yaml
+  - ventas.yaml
+  - frontend.yaml
+  - inventario-stub.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+
+# NOTA: secret.example.yaml NO se incluye. Los Secrets reales
+# (master-gateway-secrets y master-gateway-keys) los generan los overlays con
+# secretGenerator, para no versionar valores sensibles.
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: master-gateway
+    includeSelectors: false
+
+images:
+  - name: master-gateway-backend
+    newTag: dev
+  - name: master-gateway-ventas
+    newTag: dev
+  - name: master-gateway-frontend
+    newTag: dev

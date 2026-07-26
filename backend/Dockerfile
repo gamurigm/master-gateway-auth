@@ -7,21 +7,22 @@ RUN apt-get update -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
+# Se copian los package.json de TODOS los workspaces declarados en el package.json
+# raíz. Si faltan (antes sólo se copiaban backend y ventas), npm construye un
+# árbol de dependencias incompleto y algunas deps hoisted del backend —como
+# `jose`— no se instalan, haciendo que el contenedor caiga en runtime.
 COPY backend/package.json backend/package.json
-COPY frontend/package.json frontend/package.json
 COPY services/ventas/package.json services/ventas/package.json
-COPY services/inventario/package.json services/inventario/package.json
+COPY frontend/package.json frontend/package.json
+COPY frontend-vue/package.json frontend-vue/package.json
 
 COPY backend/prisma backend/prisma
 
-RUN npm ci
+RUN npm install --no-audit --no-fund
 
 COPY backend backend
 
-COPY frontend frontend
-
-RUN npm run build -w backend \
-    && npm run build -w frontend
+RUN npm run build -w backend
 
 FROM node:24.15.0-bookworm-slim AS runtime
 
@@ -37,7 +38,6 @@ COPY backend/package.json backend/package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/backend/dist backend/dist
 COPY --from=build /app/backend/prisma backend/prisma
-COPY --from=build /app/frontend/dist frontend/dist
 
 RUN mkdir -p /app/keys
 

@@ -196,6 +196,65 @@ export interface UpdateMenuDto {
   parentId?: string
 }
 
+export interface ExternalService {
+  id: string
+  code: string
+  name: string
+  description?: string | null
+  baseUrl: string
+  healthPath: string
+  openApiPath?: string | null
+  lastProbeAt?: string | null
+  lastProbeOk?: boolean | null
+  lastProbeMs?: number | null
+  moduleId?: string | null
+  estado: string
+  createdAt: string
+  updatedAt: string
+  module?: SystemModule | null
+}
+
+export interface DiscoveredEndpoint {
+  name: string
+  path: string
+  method: string
+}
+
+export interface ProbeResult {
+  reachable: boolean
+  statusCode: number | null
+  latencyMs: number
+  resolvedAddress: string
+  error: string | null
+  discoveredEndpoints: DiscoveredEndpoint[]
+}
+
+export interface ProbeServiceDto {
+  baseUrl: string
+  healthPath?: string
+  openApiPath?: string
+}
+
+export interface CreateExternalServiceDto {
+  code: string
+  name: string
+  description?: string
+  baseUrl: string
+  healthPath?: string
+  openApiPath?: string
+}
+
+export interface ProvisionMenuItem {
+  name: string
+  path: string
+  icon?: string
+}
+
+export interface ProvisionServiceDto {
+  roleIds: string[]
+  items: ProvisionMenuItem[]
+}
+
 export interface InventoryProduct {
   sku: string
   name: string

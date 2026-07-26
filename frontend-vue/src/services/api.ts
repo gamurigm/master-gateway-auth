@@ -31,7 +31,9 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const originalRequest = error.config
-    const isAuthFlow = AUTH_FLOW_PATHS.some((p) => originalRequest.url?.includes(p))
+    const isAuthFlow = AUTH_FLOW_PATHS.some((p) => originalRequest?.url?.includes(p))
+    const isAdminRequest = ['/users', '/roles', '/modules', '/menus', '/permissions']
+      .some((p) => originalRequest?.url?.includes(p))
 
     if (error.response?.status === 401 && !isAuthFlow && !originalRequest._retry) {
       if (isRefreshing) {
@@ -58,9 +60,11 @@ api.interceptors.response.use(
         return api(originalRequest)
       } catch {
         processQueue(error, null)
-        localStorage.clear()
-        sessionStorage.clear()
-        window.location.href = '/login'
+        if (!isAdminRequest) {
+          localStorage.clear()
+          sessionStorage.clear()
+          window.location.href = '/login'
+        }
         return Promise.reject(error)
       } finally {
         isRefreshing = false
@@ -69,7 +73,7 @@ api.interceptors.response.use(
 
     if (error.response?.status === 403) {
       const isAuthPath = AUTH_FLOW_PATHS.some((p) => originalRequest?.url?.includes(p))
-      if (!isAuthPath) {
+      if (!isAuthPath && !isAdminRequest) {
         window.location.href = '/unauthorized'
       }
     }

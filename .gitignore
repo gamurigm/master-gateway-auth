@@ -3,15 +3,26 @@ dist/
 coverage/
 .angular/
 .cache/
+# .env contiene los secretos reales inyectados en docker-compose.
+# Solo .env.example (con valores vacios) se versiona.
 .env
 .env.local
 .env.*.local
+!.env.example
 *.log
 tmp/pdfs/
 reports/*.json
+reports/*.md
 reports/codebert-changed-files.txt
 .cache/huggingface/
 __pycache__/
+.claude
+
+# Claves RSA generadas en tiempo de ejecucion por KeysService. NUNCA versionar
+# la clave privada: en produccion y K8s se montan desde un Secret.
 keys/
 *.pem
 
+# Secretos y claves de los overlays de Kubernetes (solo se versiona el .example).
+k8s/overlays/*/secrets.env
+k8s/overlays/*/keys/

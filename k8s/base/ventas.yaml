@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ventas
+  labels:
+    app: ventas
+spec:
+  selector:
+    app: ventas
+  ports:
+    - name: http
+      port: 3006
+      targetPort: 3006
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ventas
+  labels:
+    app: ventas
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ventas
+  template:
+    metadata:
+      labels:
+        app: ventas
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: ventas
+          image: master-gateway-ventas:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3006
+          env:
+            - name: VENTAS_PORT
+              value: "3006"
+            - name: MASTER_VALIDATE_URL
+              value: "http://backend:3000/api/internals/validate-token"
+            - name: MASTER_INTERNAL_SERVICE_NAME
+              value: "ventas"
+            - name: VENTAS_ALLOWED_ROLES
+              value: "ADMIN,VENTAS"
+            # Zero Trust: misma credencial compartida que el Master (INTERNAL_API_KEY).
+            - name: MASTER_INTERNAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: master-gateway-secrets
+                  key: MASTER_INTERNAL_API_KEY
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3006
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3006
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

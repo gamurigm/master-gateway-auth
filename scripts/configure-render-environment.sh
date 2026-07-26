@@ -7,7 +7,6 @@ required=(
   RENDER_SERVICE_ID
   INTERNAL_API_KEY
   FRONTEND_ORIGIN
-  OPA_URL
   SEED_ADMIN_PASSWORD
 )
 
@@ -55,8 +54,7 @@ put_env JWT_AUDIENCE master-gateway-clients
 put_env FRONTEND_ORIGIN "$FRONTEND_ORIGIN"
 put_env JWT_PRIVATE_KEY_PATH ./keys/private.pem
 put_env JWT_PUBLIC_KEY_PATH ./keys/public.pem
-put_env INTERNAL_ALLOWED_SERVICES ventas,inventario
-put_env OPA_URL "$OPA_URL"
+put_env INTERNAL_ALLOWED_SERVICES ventas
 put_env SEED_ADMIN_EMAIL "${SEED_ADMIN_EMAIL:-admin@example.com}"
 put_env INTERNAL_API_KEY "$INTERNAL_API_KEY"
 put_env SEED_ADMIN_PASSWORD "$SEED_ADMIN_PASSWORD"

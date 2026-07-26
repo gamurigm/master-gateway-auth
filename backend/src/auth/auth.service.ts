@@ -10,10 +10,9 @@ import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { EncryptJWT, importSPKI } from 'jose';
 import { createHash, randomUUID } from 'node:crypto';
-import { GatewaySessionService } from '../common/auth/gateway-session.service';
 import { decryptGatewayToken } from '../common/auth/jwe-token';
-import { KeysService } from '../common/keys/keys.service';
 import { omitPassword } from '../common/utils/omit-password';
+import { KeysService } from '../common/keys/keys.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { SelectRoleDto } from './dto/select-role.dto';
@@ -27,7 +26,8 @@ type TempTokenPayload = {
 type GatewayTokenPayload = {
   sub: string;
   jti: string;
-  sid?: string;
+  roleId: string;
+  roleName?: string;
 };
 
 type SessionTokens = {
@@ -47,7 +47,6 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly gatewaySessionService: GatewaySessionService,
     private readonly keysService: KeysService,
   ) {}
 
@@ -150,17 +149,13 @@ export class AuthService {
       include: { role: true },
     });
 
-    if (
-      !storedToken ||
-      storedToken.userId !== payload.sub ||
-      storedToken.estado !== Estado.ACTIVO
-    ) {
+    if (!storedToken || storedToken.estado !== Estado.ACTIVO) {
       this.logger.warn(
         JSON.stringify({
           event: 'auth.refresh.denied',
           reason: 'not_found_or_inactive',
           userId: payload.sub,
-          refreshJti: payload.jti,
+          roleId: payload.roleId,
         }),
       );
       throw new UnauthorizedException('Refresh token invalido');
@@ -275,8 +270,11 @@ export class AuthService {
     token: string,
     serviceName: string | undefined,
   ) {
+    // La comprobacion es incondicional: si INTERNAL_API_KEY faltara, el guard
+    // anterior (`expectedKey && ...`) dejaba pasar cualquier peticion interna.
+    // env.validation ya exige la variable, pero esto es defensa en profundidad.
     const expectedKey = process.env['INTERNAL_API_KEY'];
-    if (expectedKey && apiKey !== expectedKey) {
+    if (!expectedKey || apiKey !== expectedKey) {
       this.logger.warn(
         JSON.stringify({
           event: 'auth.internal_validate.denied',
@@ -299,14 +297,17 @@ export class AuthService {
     }
 
     try {
-      const session =
-        await this.gatewaySessionService.resolveAccessToken(token);
+      const payload = (await decryptGatewayToken(
+        token,
+        this.configService,
+        this.keysService,
+      )) as GatewayTokenPayload;
 
       return {
         valid: true,
-        userId: session.sub,
-        roleId: session.roleId,
-        roleName: session.roleName,
+        userId: payload.sub,
+        roleId: payload.roleId,
+        roleName: payload.roleName,
       };
     } catch {
       this.logger.warn(
@@ -350,40 +351,46 @@ export class AuthService {
   ): Promise<SessionTokens> {
     const accessJti = randomUUID();
     const refreshJti = randomUUID();
-
     const publicKey = await importSPKI(
       this.keysService.getPublicKey(),
       'RSA-OAEP-256',
     );
 
-    const encryptOptions = {
-      issuer: this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
-      audience:
-        this.configService.get<string>('JWT_AUDIENCE') ??
-        'master-gateway-clients',
-    };
 
     const accessToken = await new EncryptJWT({
       sub: userId,
       jti: accessJti,
-      sid: refreshJti,
-    } satisfies GatewayTokenPayload)
+      roleId,
+      roleName,
+    })
       .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
       .setIssuedAt()
       .setExpirationTime('15m')
-      .setIssuer(encryptOptions.issuer)
-      .setAudience(encryptOptions.audience)
+      .setIssuer(
+        this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
+      )
+      .setAudience(
+        this.configService.get<string>('JWT_AUDIENCE') ??
+          'master-gateway-clients',
+      )
       .encrypt(publicKey);
 
     const refreshToken = await new EncryptJWT({
       sub: userId,
       jti: refreshJti,
+      roleId,
+      roleName,
     } satisfies GatewayTokenPayload)
       .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
       .setIssuedAt()
       .setExpirationTime('7d')
-      .setIssuer(encryptOptions.issuer)
-      .setAudience(encryptOptions.audience)
+      .setIssuer(
+        this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
+      )
+      .setAudience(
+        this.configService.get<string>('JWT_AUDIENCE') ??
+          'master-gateway-clients',
+      )
       .encrypt(publicKey);
 
     const expiresAt = this.addDays(new Date(), 7);
@@ -416,28 +423,12 @@ export class AuthService {
   }
 
   private isAllowedInternalService(serviceName: string | undefined) {
-    if (!serviceName || serviceName.trim().length === 0) {
-      return false;
-    }
-
-    const allowlistRaw = (
-      process.env['INTERNAL_ALLOWED_SERVICES'] ?? ''
-    ).trim();
-
-    if (allowlistRaw.length === 0) {
-      return true;
-    }
-
-    const allowedServices = allowlistRaw
+    const allowedServices = (process.env['INTERNAL_ALLOWED_SERVICES'] ?? '')
       .split(',')
-      .map((s) => s.trim())
+      .map((service) => service.trim())
       .filter(Boolean);
 
-    if (allowedServices.length === 0) {
-      return true;
-    }
-
-    return allowedServices.includes(serviceName);
+    return Boolean(serviceName && allowedServices.includes(serviceName));
   }
 
   private hashIdentifier(value: string) {

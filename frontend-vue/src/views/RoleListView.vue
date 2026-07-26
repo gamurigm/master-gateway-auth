@@ -28,7 +28,7 @@
           </td>
           <td><span class="badge" :class="r.estado === 'ACTIVO' ? 'badge-active' : 'badge-inactive'">{{ r.estado }}</span></td>
           <td class="actions-cell">
-            <button class="icon-btn assign" title="Asignaciones" @click="openAssignments(r)"><AppIcon name="check-square" size="16" /></button>
+            <button type="button" class="icon-btn assign" title="Asignaciones" @click.stop="openAssignments(r)"><AppIcon name="check-square" size="16" /></button>
             <button class="icon-btn edit" title="Editar" @click="openEdit(r)"><AppIcon name="pencil" size="16" /></button>
             <button class="icon-btn delete" title="Eliminar" @click="handleDelete(r)"><AppIcon name="trash-2" size="16" /></button>
           </td>
@@ -51,6 +51,8 @@
       <div class="modal-form assignment-form">
         <h2>Asignaciones: {{ assignRole.name }}</h2>
         <div class="assignment-grid">
+          <p v-if="assignmentError" class="error assignment-error">{{ assignmentError }}</p>
+          <div v-if="assignmentLoading" class="list-state"><div class="state-spinner" /> Cargando asignaciones...</div>
           <div class="assignment-section">
             <h3>Usuarios</h3>
             <div v-for="u in allUsers" :key="u.id" class="assignment-row">
@@ -76,7 +78,7 @@
             </div>
           </div>
         </div>
-        <div class="modal-actions"><button class="primary-button" @click="closeAssign">Cerrar</button></div>
+        <div class="modal-actions"><button type="button" class="primary-button" @click="closeAssign">Cerrar</button></div>
       </div>
     </ModalWrapper>
   </div>
@@ -109,6 +111,8 @@ const allUsers = ref<User[]>([])
 const allModules = ref<SystemModule[]>([])
 const allMenus = ref<Menu[]>([])
 const allPermissions = ref<Permission[]>([])
+const assignmentLoading = ref(false)
+const assignmentError = ref('')
 
 function openCreate() {
   editingRole.value = null
@@ -127,10 +131,14 @@ function closeForm() {
   editingRole.value = null
 }
 
+function assignedUserId(assignment: unknown): string | undefined {
+  const item = assignment as { user?: { id?: string }; role?: { id?: string } }
+  return item.user?.id ?? item.role?.id
+}
 function isAssigned(type: 'user' | 'module' | 'menu' | 'permission', id: string): boolean {
   if (!assignRole.value) return false
   const r = assignRole.value as Role | RoleDetail
-  if (type === 'user') return (r as Role).users?.some((a) => a.role.id === id) ?? false
+  if (type === 'user') return (r as Role | RoleDetail).users?.some((a) => assignedUserId(a) === id) ?? false
   if (type === 'module') return (r as Role).modules?.some((a) => a.module.id === id) ?? false
   if (type === 'menu') return (r as Role).menus?.some((a) => a.menu.id === id) ?? false
   return (r as Role).permissions?.some((a) => a.permission.id === id) ?? false
@@ -180,19 +188,35 @@ async function handleDelete(r: Role) {
 async function openAssignments(r: Role) {
   assignRole.value = r
   showAssignModal.value = true
+  assignmentLoading.value = true
+  assignmentError.value = ''
+  allUsers.value = []
+  allModules.value = []
+  allMenus.value = []
+  allPermissions.value = []
+
   try {
-    const [usersRes, modulesRes, menusRes, permsRes] = await Promise.all([
-      usersService.findAll(1, 999),
+    const results = await Promise.allSettled([
+      usersService.findAll(1, 100),
       modulesService.findAll(),
       menuService.findAll(),
       permissionsService.findAll(),
     ])
-    allUsers.value = usersRes.data.items
-    allModules.value = modulesRes.data
-    allMenus.value = menusRes.data
-    allPermissions.value = permsRes.data
-  } catch {
-    error.value = 'Error al cargar datos de asignacion'
+    const [usersResult, modulesResult, menusResult, permissionsResult] = results
+    if (usersResult.status === 'fulfilled') allUsers.value = usersResult.value.data.items
+    if (modulesResult.status === 'fulfilled') allModules.value = modulesResult.value.data
+    if (menusResult.status === 'fulfilled') allMenus.value = menusResult.value.data
+    if (permissionsResult.status === 'fulfilled') allPermissions.value = permissionsResult.value.data
+
+    const failed = results.find((result) => result.status === 'rejected')
+    if (failed?.status === 'rejected') {
+      const status = failed.reason?.response?.status
+      assignmentError.value = status === 403
+        ? 'No tienes permisos para consultar uno de los catálogos. El rol administrador necesita permissions:read y roles:assign_permission.'
+        : 'No se pudieron cargar todos los datos de asignación.'
+    }
+  } finally {
+    assignmentLoading.value = false
   }
 }
 
@@ -211,7 +235,7 @@ function reloadRoleSnapshot() {
 
 async function toggleUser(u: User) {
   if (!assignRole.value) return
-  const assigned = assignRole.value.users?.some((a) => a.role.id === u.id)
+  const assigned = assignRole.value.users?.some((a) => assignedUserId(a) === u.id)
   try {
     if (assigned) await rolesService.unassignUser(assignRole.value.id, u.id)
     else await rolesService.assignUser(assignRole.value.id, u.id)

@@ -1,0 +1,11 @@
+# FIXTURE VULNERABLE - CWE-798 (Hard-coded Credentials) - OWASP 2025 A07
+# Regla esperada: SECRET-IN-CONFIG
+# NO USAR EN PRODUCCION. Valores ficticios, nunca han sido reales.
+services:
+  api:
+    image: master-gateway-backend:dev
+    environment:
+      DATABASE_URL: postgresql://app:FixtureDbPassword123@postgres:5432/app
+      JWT_SECRET: FixtureJwtSecretValue0123456789
+      INTERNAL_API_KEY: FixtureInternalApiKey9876543210
+      SEED_ADMIN_PASSWORD: FixtureAdminPassword123!

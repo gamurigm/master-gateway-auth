@@ -1,4 +1,4 @@
-﻿export interface RoleSummary {
+export interface RoleSummary {
   id: string;
   name: string;
   description?: string | null;
@@ -89,24 +89,6 @@ export interface RoleMenuAssignment {
   menu: Menu;
 }
 
-export interface Permission {
-  id: string;
-  code: string;
-  resource: string;
-  action: string;
-  description?: string | null;
-  delegable: boolean;
-  estado: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface RolePermissionAssignment {
-  id: string;
-  estado: string;
-  permission: Permission;
-}
-
 export interface Role {
   id: string;
   name: string;
@@ -117,20 +99,17 @@ export interface Role {
   users?: RoleUserAssignment[];
   modules?: RoleModuleAssignment[];
   menus?: RoleMenuAssignment[];
-  permissions?: RolePermissionAssignment[];
 }
 
 export interface RoleDetail extends Role {
   users: RoleUserAssignment[];
   modules: RoleModuleAssignment[];
   menus: RoleMenuAssignment[];
-  permissions: RolePermissionAssignment[];
 }
 
 export interface CreateRoleDto {
   name: string;
   description?: string;
-  permissionIds?: string[];
 }
 
 export interface UpdateRoleDto {
@@ -192,20 +171,4 @@ export interface UpdateMenuDto {
   order?: number;
   moduleId?: string;
   parentId?: string | null;
-}
-
-export interface InventoryProduct {
-  sku: string;
-  name: string;
-  stock: number;
-  status: string;
-}
-
-export interface InventoryResponse {
-  context: {
-    userId?: string;
-    roleId?: string;
-    roleName?: string;
-  };
-  items: InventoryProduct[];
 }

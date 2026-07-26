@@ -97,24 +97,22 @@ Variables utiles:
 | `CODEBERT_THRESHOLD` | Umbral de bloqueo, por defecto `0.85` |
 | `CODEBERT_WARN_ONLY` | Si es `true`, genera reporte pero no falla el proceso |
 
-El workflow `.github/workflows/ci.yml` ejecuta este scanner despues de build y
-pruebas. En Pull Requests y `test` analiza archivos modificados cuando hay
-cambios de codigo; en `main` corre despues de SonarQube `OK` y es obligatorio
-para permitir el deploy.
-
+El workflow `.github/workflows/ci-cd.yml` ejecuta este scanner despues de build y
+pruebas. En Pull Requests analiza archivos modificados; en `push` analiza las
+rutas principales del proyecto.
 ## GitHub Actions
 
-El workflow `.github/workflows/ci.yml` ejecuta:
+El workflow `.github/workflows/ci-cd.yml` ejecuta:
 
 - Prisma validate.
 - Build backend.
 - Tests unitarios backend.
 - Tests e2e backend.
+- Build y tests de `ventas`.
 - Type check y build frontend.
 - SonarQube Community en contenedores Docker solo en `main`.
-- Espera y aplica el Quality Gate antes del despliegue; solo `OK` permite continuar.
-- Ejecuta CodeBERT SAST despues de SonarQube en `main`; el deploy requiere SAST exitoso.
-- Notifica por Telegram inicio de pipeline `main`, resultado del gate, alertas SAST y estado de deploy.
+- Espera y aplica el Quality Gate antes del despliegue.
+- Notifica por Telegram el resultado `OK`, `ERROR` o `UNKNOWN` del gate.
 
 El runner levanta temporalmente `sonar-db` y `sonarqube:community`, genera un
 token de analisis y destruye los contenedores al finalizar. Por eso este job no
@@ -135,8 +133,7 @@ metricas historicas se necesita un SonarQube persistente en un servidor propio.
 
 SonarQube Community Build no soporta analisis multi-rama. Por eso el job
 `sonarqube` se ejecuta solo en `push` a `main`; PR, `dev` y `test` mantienen
-build y pruebas sin enviar analisis multi-rama. La rama `local` es solo para
-validacion en maquina local y no dispara GitHub Actions.
+build y pruebas sin enviar analisis multi-rama.
 
 ## SonarQube Cloud
 

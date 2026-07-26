@@ -1,13 +1,4 @@
 services:
-  - type: pserv
-    name: master-gateway-opa
-    env: docker
-    dockerfilePath: security/opa/Dockerfile
-    dockerContext: .
-    envVars:
-      - key: PORT
-        value: 8181
-
   - type: web
     name: master-gateway
     env: docker
@@ -25,12 +16,7 @@ services:
       - key: INTERNAL_API_KEY
         sync: false
       - key: INTERNAL_ALLOWED_SERVICES
-        value: ventas,inventario
-      - key: OPA_URL
-        fromService:
-          type: pserv
-          name: master-gateway-opa
-          property: hostport
+        value: ventas
       - key: SEED_ADMIN_EMAIL
         value: admin@example.com
       - key: SEED_ADMIN_PASSWORD

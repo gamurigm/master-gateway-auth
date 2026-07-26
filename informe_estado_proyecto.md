@@ -1,42 +1,86 @@
 # Informe de Estado del Proyecto: Master Gateway de Autenticación y Autorización
 
-## 1. Análisis de la Implementación Actual vs. Requerimientos (`proyectoIII.md`)
+Estado del proyecto frente a los requisitos de `proyectoIII.md` y su anexo de
+infraestructura. Actualizado tras cerrar las fases de agente SAST, seeds,
+diagramas, registro de microservicios externos y Kubernetes.
 
-Se ha realizado una revisión exhaustiva de los requerimientos descritos en `proyectoIII.md` (y su respectivo `PLAN_IMPLEMENTACION_MASTER_GATEWAY.md`) contra el código fuente existente en el repositorio local.
+## Estado general: **Funcionalmente completo**
 
-### Estado General: **Avanzado**
-La estructura base del proyecto se encuentra sólidamente establecida, adoptando el stack técnico recomendado (NestJS para Backend, Angular para Frontend, Prisma ORM, y PostgreSQL). Se evidencia un gran progreso en la arquitectura principal y en la configuración DevSecOps.
+Stack real: **NestJS + Prisma + PostgreSQL** en el backend, **Vue 3** en el
+frontend (SPA con nginx), microservicio hijo **ventas** bajo Zero Trust, y un
+pipeline **GitHub Actions** con SonarQube, SAST CodeBERT y despliegue a Render.
 
-### Lo que ya está implementado (Completado / En proceso avanzado):
-1. **Modelo de Datos y Base de Datos**: El esquema de Prisma (`schema.prisma`) implementa correctamente todas las entidades requeridas (Users, Roles, SystemModules, Menus) incluyendo las relaciones Many-to-Many (`UserRole`, `RoleModule`, `RoleMenu`), la relación recursiva de Menús, y los campos estrictos de auditoría y Soft Delete (`estado`, `createdAt`, `createdBy`, etc.).
-2. **Scaffolding Backend**: Los módulos, controladores y servicios base (CRUD) para `auth`, `users`, `roles`, `menus` y `modules` ya existen en `backend/src/`.
-3. **Scaffolding Frontend**: Existe una estructura inicial de Angular en `frontend/src/` con configuración de rutas base (`app.routes.ts`) y estructuración por features/core.
-4. **Infraestructura Zero Trust / Microservicios**: Se ha creado el directorio para el microservicio hijo de ejemplo (`services/ventas`).
-5. **DevSecOps y Seguridad Shift-Left**: Existe el pipeline de GitHub Actions (`ci.yml`) y la integración del modelo de Machine Learning para análisis SAST (`security/codebert-sast`).
+> El frontend Angular (`frontend/`) quedó como legado; el activo es
+> `frontend-vue/`. Sólo se conserva por compatibilidad y debe retirarse.
 
----
+## 1. Requisitos funcionales — implementados
 
-## 2. Lo que falta por desarrollar
+| Requisito (PDF) | Estado | Dónde |
+| --- | --- | --- |
+| Modelo M:N Usuarios–Roles con tabla pivote auditada | ✅ | `schema.prisma`, `usuario_roles` |
+| Menús recursivos en una tabla (Adjacency List) | ✅ | `menus` con `parent_id`; árbol en `menus.service.ts` |
+| CRUD de Identidad, Módulos y Menús | ✅ | `users`, `roles`, `modules`, `menus` |
+| Pantalla de selección de rol (Workspace Selector) | ✅ | `SelectRoleView.vue` |
+| Login en dos fases (tempToken → accessToken) | ✅ | `auth.service.ts` |
+| Enrutamiento basado en menú, **sin rutas hardcodeadas** | ✅ | `router/dynamic-routes.ts`, `router.addRoute()` |
+| Registro dinámico de microservicios externos | ✅ | `external-services/` + wizard en Vue |
+| Zero Trust: el hijo valida cada token contra el Master | ✅ | `POST /internals/validate-token`, `services/ventas` |
+| Menor privilegio: el token lleva sólo el rol elegido | ✅ | `select-role` emite JWE por rol |
 
-Aunque el esqueleto y gran parte del backend están listos, faltan las integraciones críticas, la lógica de negocio fina de seguridad y la puesta en marcha de la interfaz dinámica.
+## 2. Requisitos no funcionales y de seguridad — implementados
 
-Para facilitar la gestión y asignación, lo que falta se ha **dividido en tres partes equitativas**:
+| Requisito | Estado | Notas |
+| --- | --- | --- |
+| Hash de contraseñas robusto | ✅ | `argon2id` (más fuerte que bcrypt) |
+| Token de acceso | ✅ | **JWE cifrado (`dir`/`A256GCM`)**, no sólo firmado |
+| Refresh token con rotación + detección de reúso | ✅ | `refresh_tokens` con `jti`, hash argon2id |
+| Consultas parametrizadas (anti-inyección) | ✅ | Prisma ORM en todo el acceso a datos |
+| Soft delete + campos de auditoría | ✅ | `estado`, `creado_por`, `actualizado_por` en todas las entidades |
+| Rate limiting, Helmet, sanitización | ✅ | `@nestjs/throttler`, `helmet`, `@Sanitize` |
+| Secrets fuera del código | ✅ | `.env` + `${VAR:?}` en compose; Secrets en K8s |
+| SAST Shift-Left con modelo tipo CodeBERT | ✅ | `security/codebert-sast` con mapeo **CWE + OWASP 2025** |
+| Defensa SSRF en el probe de servicios externos | ✅ | `ssrf-guard.ts` (CWE-918) |
 
-### Parte 1: Integración Frontend y Experiencia de Usuario Dinámica (Workspace Selector)
-Esta parte se enfoca en hacer funcional la interfaz de usuario de acuerdo con las reglas de negocio estrictas de selección de rol.
-*   **Pantallas de Autenticación:** Finalizar y conectar la pantalla de Login para que devuelva el `TempToken` y redirija a la pantalla de selección de rol (Workspace Selector).
-*   **Gestión de Estado y Tokens:** Guardar de forma segura el JWT definitivo emitido tras la selección del rol y manejar la rotación del `refreshToken`.
-*   **Navegación Dinámica:** Consumir el endpoint `GET /api/menus/tree` (recursivo) para renderizar dinámicamente el Sidebar/Menú de navegación en Angular.
-*   **Enrutamiento Protegido:** Registrar las rutas hijas en el `Angular Router` dinámicamente en tiempo de ejecución para evitar rutas administrativas *hardcodeadas*.
+## 3. DevSecOps — implementado
 
-### Parte 2: Refinamiento de Backend, Seguridad Zero Trust y Microservicios Hijos
-Esta fase asegura que las reglas "Shift-Left" y de confianza cero sean impenetrables.
-*   **Zero Trust en Microservicio Hijo:** Implementar la lógica en el servicio de `ventas` para que intercepte el token de las peticiones y lo valide contra el Gateway Maestro (usando validación directa asimétrica o llamando a `POST /api/internals/validate-token`).
-*   **Validaciones y Seguridad Shift-Left Backend:** Asegurar que todos los endpoints CRUD del backend filtren correctamente por `estado = ACTIVO` (Soft Delete) y que los campos de auditoría (`createdBy`, `updatedBy`) se llenen automáticamente usando los interceptores/middlewares y no desde los controladores.
-*   **Protección de Endpoints:** Verificar la correcta implementación de limitación de tasa (Rate Limiting), sanitización de entradas, Helmet y políticas estables contra inyección de SQL.
+- Pipeline `.github/workflows/ci-cd.yml`: build → self-test del agente SAST →
+  SonarQube Quality Gate → SAST CodeBERT → deploy a Render por CLI.
+- **Agente SAST**: emite CWE, categoría OWASP Top 10 : 2025, línea, evidencia,
+  CVEs de referencia y remediación. Reporte JSON + Markdown. 13 fixtures
+  vulnerables + 3 seguros validan recall (100%) y falsos positivos (0).
+- **Telegram**: notifica inicio de pipeline en main, Quality Gate, alerta SAST
+  detallada (con CWE) y resultado del despliegue.
+- **Kubernetes**: manifiestos Kustomize (`k8s/`), overlays dev/prod, probados en
+  un cluster real (minikube). Escalado horizontal validado con claves RSA
+  compartidas vía Secret.
 
-### Parte 3: Pipeline DevSecOps Final, Pruebas y Documentación
-Fase de cierre para garantizar la calidad y despliegue continuo acorde a los requisitos de la materia.
-*   **Cobertura de Pruebas:** Redactar pruebas unitarias y/o de integración (E2E) para verificar flujos críticos (ej. intento de reutilización de refresh token, validación de CTE en menús recursivos, accesos no autorizados a rutas hijas).
-*   **Refinamiento CI/CD:** Asegurar que el Quality Gate de SonarCloud y el modelo SAST (CodeBERT) bloqueen correctamente el pipeline en GitHub Actions frente a código vulnerable, y configurar las notificaciones automatizadas por Telegram.
-*   **Despliegue y Documentación:** Realizar pruebas de despliegue automatizado hacia plataformas PaaS (Render/Railway). Completar los archivos Markdown de documentación técnica, evidencias de pantallas, configuración y el reporte final académico requerido por el docente.
+## 4. Desviaciones documentadas (no son deuda, son decisiones)
+
+1. **Árbol de menús en memoria, no con `WITH RECURSIVE`.** Una consulta plana +
+   ensamblado en JS evita el N+1, es portable y no dispara la propia regla
+   `TS-RAW-PRISMA` del SAST. Cumple el requisito de rendimiento de §6.4. Ver
+   `docs/modelo-datos.md`.
+2. **SonarQube Community efímero, no SonarCloud.** El pipeline levanta un
+   contenedor de Sonar en CI en vez de usar el servicio cloud.
+
+## 5. Pendiente (menor)
+
+- Retirar el frontend Angular legado (`frontend/`) del workspace, del
+  `docker-compose.yml` y de `sonar-project.properties`.
+- Rotar los secretos que estuvieron en el historial de git de `docker-compose.yml`.
+- Migrar el almacenamiento de tokens del frontend de `localStorage` a cookies
+  `HttpOnly` (endurecimiento anti-XSS).
+- Autorización granular por permiso/menú (hoy el CRUD administrativo se limita
+  por rol `ADMIN`).
+- Blacklist temporal de `jti` de access tokens para invalidación inmediata.
+
+## 6. Verificación
+
+- Backend: **84 pruebas unitarias + 7 e2e** en verde.
+- Agente SAST: self-test **16/16**, escaneo del repo **SAFE** (0 críticos).
+- Builds de backend, ventas y frontend-vue correctos.
+- Despliegue en Kubernetes: 5 componentes sanos, health + conexión a PostgreSQL
+  OK, y validación de token entre 3 réplicas **12/12**.
+
+Diagramas: `docs/diagramas-secuencia.md` (5 flujos) y
+`docs/arquitectura_alto_nivel.md` (componentes + modelo ER).

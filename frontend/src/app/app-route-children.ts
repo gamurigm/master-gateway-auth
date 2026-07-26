@@ -8,7 +8,6 @@ import { UserFormComponent } from "./features/user-form/user-form.component";
 import { RoleFormComponent } from "./features/role-form/role-form.component";
 import { ModuleFormComponent } from "./features/module-form/module-form.component";
 import { MenuFormComponent } from "./features/menu-form/menu-form.component";
-import { InventoryListComponent } from "./features/inventory-list/inventory-list.component";
 
 export const baseAppChildren: Routes = [
   { path: "", component: DashboardComponent },
@@ -24,5 +23,4 @@ export const baseAppChildren: Routes = [
   { path: "menus", component: MenuListComponent },
   { path: "menus/new", component: MenuFormComponent },
   { path: "menus/:id", component: MenuFormComponent },
-  { path: "inventario", component: InventoryListComponent },
 ];

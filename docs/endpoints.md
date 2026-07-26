@@ -17,37 +17,51 @@ Base local: `http://localhost:3000/api`
 
 Requieren `Authorization: Bearer <accessToken>`.
 
-| Metodo | Ruta | Permiso/Politica | Uso |
+| Metodo | Ruta | Rol | Uso |
 | --- | --- | --- | --- |
 | `POST` | `/auth/logout` | Autenticado | Revoca refresh token |
 | `GET` | `/menus/tree` | Autenticado | Devuelve menu dinamico del rol activo |
-| `GET` | `/permissions` | `permissions:read` | Lista catalogo de permisos |
-| `GET` | `/users` | `users:read` | Lista usuarios activos |
-| `POST` | `/users` | `users:create` | Crea usuario |
-| `PUT` | `/users/:id` | `users:update` | Actualiza usuario |
-| `DELETE` | `/users/:id` | `users:delete_soft` | Inactiva usuario |
-| `GET` | `/roles` | `roles:read` | Lista roles activos con asignaciones |
-| `GET` | `/roles/:id` | `roles:read` | Obtiene detalle de rol |
-| `POST` | `/roles` | `roles:create` + politicas OPA dinamicas | Crea rol, opcionalmente con permisos iniciales |
-| `PUT` | `/roles/:id` | `roles:update` + politica OPA dinamica | Actualiza rol |
-| `DELETE` | `/roles/:id` | `roles:delete_soft` + politica OPA dinamica | Inactiva rol |
-| `POST` | `/roles/:id/users` | `roles:assign_user` + politica OPA dinamica | Asigna usuario a rol |
-| `DELETE` | `/roles/:id/users/:userId` | `roles:unassign_user` + politica OPA dinamica | Inactiva asignacion usuario-rol |
-| `POST` | `/roles/:id/modules` | `roles:assign_module` + politica OPA dinamica | Asigna modulo a rol |
-| `DELETE` | `/roles/:id/modules/:moduleId` | `roles:unassign_module` + politica OPA dinamica | Inactiva asignacion rol-modulo |
-| `POST` | `/roles/:id/menus` | `roles:assign_menu` + politica OPA dinamica | Asigna menu a rol |
-| `DELETE` | `/roles/:id/menus/:menuId` | `roles:unassign_menu` + politica OPA dinamica | Inactiva asignacion rol-menu |
-| `POST` | `/roles/:id/permissions` | Politica OPA dinamica `roles:assign_permission` | Asigna permiso a rol |
-| `DELETE` | `/roles/:id/permissions/:permissionId` | Politica OPA dinamica `roles:unassign_permission` | Inactiva asignacion rol-permiso |
-| `GET` | `/modules` | `modules:read` | Lista modulos activos |
-| `GET` | `/modules/:id` | `modules:read` | Obtiene modulo |
-| `POST` | `/modules` | `modules:create` | Crea modulo |
-| `PUT` | `/modules/:id` | `modules:update` | Actualiza modulo |
-| `DELETE` | `/modules/:id` | `modules:delete_soft` | Inactiva modulo |
-| `GET` | `/menus` | `menus:read` | Lista menus activos |
-| `POST` | `/menus` | `menus:create` | Crea menu |
-| `PUT` | `/menus/:id` | `menus:update` | Actualiza menu |
-| `DELETE` | `/menus/:id` | `menus:delete_soft` | Inactiva menu |
+| `GET` | `/users` | `ADMIN` | Lista usuarios activos |
+| `POST` | `/users` | `ADMIN` | Crea usuario |
+| `PUT` | `/users/:id` | `ADMIN` | Actualiza usuario |
+| `DELETE` | `/users/:id` | `ADMIN` | Inactiva usuario |
+| `GET` | `/roles` | `ADMIN` | Lista roles activos |
+| `POST` | `/roles` | `ADMIN` | Crea rol |
+| `PUT` | `/roles/:id` | `ADMIN` | Actualiza rol |
+| `DELETE` | `/roles/:id` | `ADMIN` | Inactiva rol |
+| `POST` | `/roles/:id/users` | `ADMIN` | Asigna usuario a rol |
+| `DELETE` | `/roles/:id/users/:userId` | `ADMIN` | Inactiva asignacion usuario-rol |
+| `POST` | `/roles/:id/modules` | `ADMIN` | Asigna modulo a rol |
+| `POST` | `/roles/:id/menus` | `ADMIN` | Asigna menu a rol |
+| `GET` | `/modules` | `ADMIN` | Lista modulos activos |
+| `GET` | `/modules/:id` | `ADMIN` | Obtiene modulo |
+| `POST` | `/modules` | `ADMIN` | Crea modulo |
+| `PUT` | `/modules/:id` | `ADMIN` | Actualiza modulo |
+| `DELETE` | `/modules/:id` | `ADMIN` | Inactiva modulo |
+| `GET` | `/menus` | `ADMIN` | Lista menus activos |
+| `GET` | `/menus/tree` | Autenticado | Arbol de menus del rol activo |
+| `POST` | `/menus` | `ADMIN` | Crea menu |
+| `PUT` | `/menus/:id` | `ADMIN` | Actualiza menu |
+| `DELETE` | `/menus/:id` | `ADMIN` | Inactiva menu |
+| `GET` | `/external-services` | `ADMIN` | Lista servicios externos registrados |
+| `POST` | `/external-services/probe` | `ADMIN` | Verifica un servicio SIN registrarlo (probe anti-SSRF) |
+| `GET` | `/external-services/:id` | `ADMIN` | Obtiene un servicio |
+| `POST` | `/external-services` | `ADMIN` | Registra un servicio (exige probe exitoso) |
+| `POST` | `/external-services/:id/probe` | `ADMIN` | Re-verifica y persiste el estado |
+| `POST` | `/external-services/:id/provision` | `ADMIN` | Genera modulo, menus y asignaciones de rol |
+| `PUT` | `/external-services/:id` | `ADMIN` | Actualiza un servicio |
+| `DELETE` | `/external-services/:id` | `ADMIN` | Inactiva un servicio |
+
+### Flujo de registro de un microservicio externo
+
+1. `POST /external-services/probe` con `{ baseUrl, healthPath }` — comprueba que el servicio
+   responde y descubre endpoints por OpenAPI si expone `openApiPath`. **No persiste nada.**
+2. `POST /external-services` — registra el servicio. El backend **vuelve a verificar** el probe;
+   un servicio caido no se registra (generaria menus rotos).
+3. `POST /external-services/:id/provision` con `{ roleIds, items }` — en una transaccion crea el
+   modulo, un menu raiz agrupador (sin `url`) y un menu hoja por endpoint (con `url`), mas las
+   asignaciones rol-modulo y rol-menu. El frontend recarga el arbol e inyecta las rutas con
+   `router.addRoute()` sin recargar la pagina.
 
 ## Microservicio hijo `ventas`
 
@@ -57,12 +71,3 @@ Base local: `http://localhost:3006`
 | --- | --- | --- | --- |
 | `GET` | `/health` | Publico | Estado del microservicio |
 | `GET` | `/ventas/ordenes` | `Authorization: Bearer <accessToken>` | Devuelve ordenes demo despues de validar token contra el Master |
-
-## Microservicio hijo `inventario`
-
-Base local: `http://localhost:3007`
-
-| Metodo | Ruta | Auth | Descripcion |
-| --- | --- | --- | --- |
-| `GET` | `/health` | No | Health del servicio |
-| `GET` | `/inventario/productos` | `Authorization: Bearer <accessToken>` | Devuelve productos demo despues de validar token contra el Master |

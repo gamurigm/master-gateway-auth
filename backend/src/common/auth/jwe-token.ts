@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { jwtDecrypt, JWTPayload, importPKCS8 } from 'jose';
+import { importPKCS8, jwtDecrypt, JWTPayload } from 'jose';
 import { KeysService } from '../keys/keys.service';
 
 export async function decryptGatewayToken(
@@ -7,11 +7,7 @@ export async function decryptGatewayToken(
   configService: ConfigService,
   keysService: KeysService,
 ): Promise<JWTPayload> {
-  const privateKey = await importPKCS8(
-    keysService.getPrivateKey(),
-    'RSA-OAEP-256',
-  );
-
+  const privateKey = await importPKCS8(keysService.getPrivateKey(), 'RSA-OAEP-256');
   const { payload } = await jwtDecrypt(token, privateKey, {
     issuer: configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
     audience:

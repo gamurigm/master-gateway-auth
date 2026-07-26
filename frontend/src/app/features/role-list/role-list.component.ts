@@ -2,12 +2,11 @@
 import { CommonModule } from "@angular/common";
 import { finalize, forkJoin, timeout } from "rxjs";
 import { RolesService } from "../../core/roles.service";
-import { Role, User, SystemModule, Menu, Permission } from "../../core/api.models";
+import { Role, User, SystemModule, Menu } from "../../core/api.models";
 import { RoleFormComponent } from "../role-form/role-form.component";
 import { UsersService } from "../../core/users.service";
 import { ModulesService } from "../../core/modules.service";
 import { MenuService } from "../../core/menu.service";
-import { PermissionsService } from "../../core/permissions.service";
 
 @Component({
   selector: "app-role-list",
@@ -19,7 +18,7 @@ import { PermissionsService } from "../../core/permissions.service";
         <div>
           <span class="eyebrow">Permisos</span>
           <h1>Roles</h1>
-          <p>Define perfiles de acceso y asigna usuarios, modulos, menus y permisos desde un solo lugar.</p>
+          <p>Define perfiles de acceso y asigna usuarios, modulos y menus desde un solo lugar.</p>
         </div>
         <button class="primary-button compact-action" type="button" (click)="openCreate()">+ Nuevo rol</button>
       </header>
@@ -56,7 +55,6 @@ import { PermissionsService } from "../../core/permissions.service";
                   <span>{{ role.users?.length || 0 }} usuarios</span>
                   <span>{{ role.modules?.length || 0 }} modulos</span>
                   <span>{{ role.menus?.length || 0 }} menus</span>
-                  <span>{{ role.permissions?.length || 0 }} permisos</span>
                 </div>
               </td>
               <td>
@@ -100,7 +98,7 @@ import { PermissionsService } from "../../core/permissions.service";
         <div *ngIf="assignmentLoading" class="list-state compact-state">
           <span class="state-spinner"></span>
           <strong>Cargando opciones</strong>
-          <small>Consultando usuarios, modulos, menus y permisos disponibles...</small>
+          <small>Consultando usuarios, modulos y menus disponibles...</small>
         </div>
 
         <div *ngIf="!assignmentLoading && assignmentError" class="error assignment-error">{{ assignmentError }}</div>
@@ -183,32 +181,6 @@ import { PermissionsService } from "../../core/permissions.service";
               <div class="mini-empty">No hay menus disponibles.</div>
             </ng-template>
           </section>
-
-          <section class="assignment-section wide">
-            <div class="assignment-section-title">
-              <h3>Permisos</h3>
-              <span>{{ assignedPermissionsCount }} asignados</span>
-            </div>
-
-            <ng-container *ngIf="availablePermissions.length; else noPermissions">
-              <label class="assignment-option" *ngFor="let permission of availablePermissions">
-                <input
-                  type="checkbox"
-                  #permissionCheck
-                  [checked]="isPermissionAssigned(permission.id)"
-                  [disabled]="isSaving('permission:' + permission.id)"
-                  (change)="togglePermission(permission.id, permissionCheck.checked)"
-                />
-                <span>
-                  <strong>{{ permission.description || permission.code }}</strong>
-                  <small>{{ permission.code }} - {{ permission.delegable ? 'Delegable' : 'Solo superadmin' }}</small>
-                </span>
-              </label>
-            </ng-container>
-            <ng-template #noPermissions>
-              <div class="mini-empty">No hay permisos disponibles.</div>
-            </ng-template>
-          </section>
         </div>
       </div>
     </div>
@@ -219,7 +191,6 @@ export class RoleListComponent implements OnInit {
   private readonly usersService = inject(UsersService);
   private readonly modulesService = inject(ModulesService);
   private readonly menuService = inject(MenuService);
-  private readonly permissionsService = inject(PermissionsService);
 
   roles: Role[] = [];
   loading = true;
@@ -233,7 +204,6 @@ export class RoleListComponent implements OnInit {
   availableUsers: User[] = [];
   availableModules: SystemModule[] = [];
   availableMenus: Menu[] = [];
-  availablePermissions: Permission[] = [];
 
   get assignedUsersCount() {
     return this.assignmentRole?.users?.length ?? 0;
@@ -245,10 +215,6 @@ export class RoleListComponent implements OnInit {
 
   get assignedMenusCount() {
     return this.assignmentRole?.menus?.length ?? 0;
-  }
-
-  get assignedPermissionsCount() {
-    return this.assignmentRole?.permissions?.length ?? 0;
   }
 
   ngOnInit() {
@@ -307,7 +273,6 @@ export class RoleListComponent implements OnInit {
       users: this.usersService.findAll(1, 100),
       modules: this.modulesService.findAll(),
       menus: this.menuService.findAll(),
-      permissions: this.permissionsService.findAll(),
     })
       .pipe(
         timeout(6000),
@@ -316,17 +281,15 @@ export class RoleListComponent implements OnInit {
         }),
       )
       .subscribe({
-        next: ({ users, modules, menus, permissions }) => {
+        next: ({ users, modules, menus }) => {
           this.availableUsers = Array.isArray(users.items) ? users.items : [];
           this.availableModules = Array.isArray(modules) ? modules : [];
           this.availableMenus = Array.isArray(menus) ? menus : [];
-          this.availablePermissions = Array.isArray(permissions) ? permissions : [];
         },
         error: () => {
           this.availableUsers = [];
           this.availableModules = [];
           this.availableMenus = [];
-          this.availablePermissions = [];
           this.assignmentError = "No se pudieron cargar las opciones de asignacion.";
         },
       });
@@ -337,7 +300,6 @@ export class RoleListComponent implements OnInit {
     this.assignmentLoading = false;
     this.assignmentSaving = "";
     this.assignmentError = "";
-    this.availablePermissions = [];
   }
 
   isUserAssigned(userId: string) {
@@ -350,14 +312,6 @@ export class RoleListComponent implements OnInit {
 
   isMenuAssigned(menuId: string) {
     return Boolean(this.assignmentRole?.menus?.some((item) => item.estado === "ACTIVO" && item.menu.id === menuId));
-  }
-
-  isPermissionAssigned(permissionId: string) {
-    return Boolean(
-      this.assignmentRole?.permissions?.some(
-        (item) => item.estado === "ACTIVO" && item.permission.id === permissionId,
-      ),
-    );
   }
 
   isSaving(key: string) {
@@ -411,25 +365,6 @@ export class RoleListComponent implements OnInit {
     const request = checked
       ? this.rolesService.assignMenu(role.id, menuId)
       : this.rolesService.unassignMenu(role.id, menuId);
-
-    request.pipe(timeout(6000)).subscribe({
-      next: () => this.reloadRoleSnapshot(role.id),
-      error: (err) => {
-        this.assignmentError = this.readAssignmentError(err);
-        this.assignmentSaving = "";
-      },
-    });
-  }
-
-  togglePermission(permissionId: string, checked: boolean) {
-    const role = this.assignmentRole;
-    if (!role || this.assignmentSaving) return;
-
-    this.assignmentSaving = `permission:${permissionId}`;
-    this.assignmentError = "";
-    const request = checked
-      ? this.rolesService.assignPermission(role.id, permissionId)
-      : this.rolesService.unassignPermission(role.id, permissionId);
 
     request.pipe(timeout(6000)).subscribe({
       next: () => this.reloadRoleSnapshot(role.id),

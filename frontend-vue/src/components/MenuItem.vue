@@ -1,13 +1,13 @@
 <template>
   <li>
-    <a
+    <router-link
       v-if="node.url?.startsWith('/app/')"
-      :href="node.url"
+      :to="node.url"
       class="menu-link"
     >
       <AppIcon v-if="node.icon" :name="node.icon" size="16" />
       <span>{{ node.name }}</span>
-    </a>
+    </router-link>
     <a
       v-else-if="node.url"
       :href="node.url"

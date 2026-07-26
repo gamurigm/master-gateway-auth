@@ -1,8 +1,10 @@
-﻿import { CommonModule } from "@angular/common";
+import { CommonModule } from "@angular/common";
 import { Component, OnInit, inject } from "@angular/core";
 import {
   Route,
   Router,
+  RouterLink,
+  RouterLinkActive,
   RouterOutlet,
 } from "@angular/router";
 import { MenuModule, MenuNode } from "../../core/api.models";
@@ -15,16 +17,15 @@ import { UserListComponent } from "../user-list/user-list.component";
 import { RoleListComponent } from "../role-list/role-list.component";
 import { ModuleListComponent } from "../module-list/module-list.component";
 import { MenuListComponent } from "../menu-list/menu-list.component";
-import { InventoryListComponent } from "../inventory-list/inventory-list.component";
-import { MenuItemComponent } from "./menu-item.component";
 
 @Component({
   selector: "app-shell",
   standalone: true,
   imports: [
     CommonModule,
+    RouterLink,
+    RouterLinkActive,
     RouterOutlet,
-    MenuItemComponent,
   ],
   template: `
     <div class="shell">
@@ -38,26 +39,14 @@ import { MenuItemComponent } from "./menu-item.component";
         </div>
 
         <nav class="side-nav" aria-label="Navegacion principal">
-          <div *ngIf="menuLoading" class="nav-state">
-            <span class="state-spinner"></span>
-            <strong>Cargando navegacion</strong>
-          </div>
-
-          <div *ngIf="!menuLoading && menuError" class="nav-state nav-error">
-            <strong>No se pudo cargar la navegacion</strong>
-            <button type="button" class="secondary-button compact-action" (click)="loadNavigation()">Reintentar</button>
-          </div>
-
-          <ng-container *ngIf="!menuLoading && !menuError">
-            <section *ngFor="let module of modules" class="menu-module">
-              <h2>{{ module.name }}</h2>
-              <app-menu-item *ngFor="let item of module.menus" [node]="item" />
-            </section>
-
-            <div *ngIf="modules.length === 0" class="nav-state">
-              <strong>Sin navegacion asignada</strong>
-            </div>
-          </ng-container>
+          <section class="menu-module">
+            <h2>Administracion</h2>
+            <a class="menu-link" routerLink="/app" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
+            <a class="menu-link" routerLink="/app/users" routerLinkActive="active">Usuarios</a>
+            <a class="menu-link" routerLink="/app/roles" routerLinkActive="active">Roles</a>
+            <a class="menu-link" routerLink="/app/modules" routerLinkActive="active">Modulos</a>
+            <a class="menu-link" routerLink="/app/menus" routerLinkActive="active">Menus</a>
+          </section>
         </nav>
 
         <button type="button" class="secondary-button logout-button" (click)="logout()">
@@ -142,18 +131,6 @@ import { MenuItemComponent } from "./menu-item.component";
         padding-right: 4px;
       }
 
-      .nav-state {
-        display: grid;
-        gap: 10px;
-        color: #64748b;
-        font-size: 13px;
-        font-weight: 750;
-      }
-
-      .nav-error {
-        color: #991b1b;
-      }
-
       .menu-module h2 {
         margin: 0 0 10px;
         color: #94a3b8;
@@ -215,27 +192,16 @@ export class ShellComponent implements OnInit {
   private readonly router = inject(Router);
 
   modules: MenuModule[] = [];
-  menuLoading = true;
-  menuError = "";
   roleName = this.authService.getCurrentRole()?.name ?? "Sin rol";
 
   ngOnInit() {
-    this.loadNavigation();
-  }
-
-  loadNavigation() {
-    this.menuLoading = true;
-    this.menuError = "";
     this.menuService.tree().subscribe({
       next: (modules) => {
         this.modules = Array.isArray(modules) ? modules : [];
-        this.menuLoading = false;
         this.registerDynamicRoutes(this.modules);
       },
       error: () => {
         this.modules = [];
-        this.menuLoading = false;
-        this.menuError = "No se pudo cargar el menu del rol activo.";
       },
     });
   }
@@ -267,7 +233,6 @@ export class ShellComponent implements OnInit {
     roles: RoleListComponent,
     modules: ModuleListComponent,
     menus: MenuListComponent,
-    inventario: InventoryListComponent,
   };
 
   private flattenMenuRoutes(modules: MenuModule[]): Route[] {
