@@ -109,6 +109,42 @@ describe('MenusService', () => {
     await expect(service.treeForRole(ROLE_ID)).resolves.toEqual([]);
   });
 
+  it.each(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN'])(
+    'exposes every active menu to the privileged role %s',
+    async (roleName) => {
+      prisma.menu.findMany.mockResolvedValue([
+        menuRecord(ROOT_MENU_ID, 'Productos', null, null, 0),
+        menuRecord(
+          CHILD_MENU_ID,
+          'Lista de productos',
+          '/app/test-products/productos',
+          ROOT_MENU_ID,
+          1,
+        ),
+      ]);
+
+      const result = await service.treeForRole(ROLE_ID, roleName);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          id: MODULE_ID,
+          menus: [
+            expect.objectContaining({
+              id: ROOT_MENU_ID,
+              children: [
+                expect.objectContaining({
+                  id: CHILD_MENU_ID,
+                  url: '/app/test-products/productos',
+                }),
+              ],
+            }),
+          ],
+        }),
+      ]);
+      expect(prisma.roleMenu.findMany).not.toHaveBeenCalled();
+    },
+  );
+
   it('rejects creating a menu under a parent from another module', async () => {
     prisma.systemModule.findFirst.mockResolvedValue({ id: MODULE_ID });
     prisma.menu.findFirst.mockResolvedValue({

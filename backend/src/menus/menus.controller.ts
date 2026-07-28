@@ -30,7 +30,7 @@ export class MenusController {
 
   @Get('tree')
   tree(@CurrentUser() user: AuthenticatedUser) {
-    return this.menusService.treeForRole(user.roleId);
+    return this.menusService.treeForRole(user.roleId, user.roleName);
   }
 
   @Get()

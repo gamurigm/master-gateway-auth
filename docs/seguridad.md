@@ -12,6 +12,7 @@
 - Refresh token persistido como hash y rotado en cada uso.
 - Reutilizacion de refresh token marca la familia activa como inactiva.
 - CRUD administrativo protegido por JWT y rol `ADMIN`; `SUPER_ADMIN` pasa cualquier `RequireRoles` administrativo. En usuarios, `ADMIN` solo inactiva/bloquea y `SUPER_ADMIN` puede borrar fisicamente.
+- El proxy de microservicios exige JWT y asignacion de menu para roles normales; `ADMIN` y `SUPER_ADMIN` tienen acceso global a todos los modulos, menus y endpoints registrados.
 - Microservicio hijo `ventas` valida tokens contra el Master antes de responder.
 - Endpoint interno protegido por API key y allowlist `INTERNAL_ALLOWED_SERVICES`.
 - Logs estructurados con `x-request-id`, estado HTTP, duracion y contexto de usuario/rol cuando existe.
