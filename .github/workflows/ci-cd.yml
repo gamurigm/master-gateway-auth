@@ -794,6 +794,7 @@ jobs:
   # Siempre termina explicitamente en success o failure en Pull Requests.
   # ──────────────────────────────────────────────────────────────
   promotion-ready:
+    name: ${{ github.event_name == 'pull_request' && 'promotion-ready' || 'push-summary' }}
     if: always() && github.event_name == 'pull_request'
     needs:
       - branch-flow
