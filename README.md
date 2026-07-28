@@ -99,6 +99,146 @@ docs/              # Documentacion, diagramas y coleccion HTTP
 - Endpoints protegidos con guards, validacion DTO y rate limiting.
 - Claves RSA auto-generadas con rotacion via `KeysService`.
 
+## Diagramas de secuencia
+
+Estos diagramas representan los flujos principales implementados. La
+explicacion detallada de cada flujo esta en
+[`docs/diagramas-secuencia.md`](docs/diagramas-secuencia.md).
+
+### Autenticacion y seleccion de rol
+
+```mermaid
+sequenceDiagram
+    actor U as Usuario
+    participant F as Frontend (Vue SPA)
+    participant M as Master (NestJS)
+    participant DB as PostgreSQL
+
+    U->>F: Ingresa email y contrasena
+    F->>M: POST /api/auth/login
+    M->>DB: Busca usuario activo
+    DB-->>M: Usuario + hash argon2id
+    M->>M: argon2.verify(password, hash)
+    M-->>F: 200 { tempToken (RS256, 5m), roles[] }
+    Note over F: Se fuerza el selector de rol
+
+    U->>F: Selecciona un rol
+    F->>M: POST /api/auth/select-role { tempToken, roleId }
+    M->>DB: Verifica que el usuario tenga ese rol
+    DB-->>M: Asignacion valida
+    M->>M: Genera accessToken JWE y refreshToken RS256
+    M->>DB: Persiste refresh token (hash argon2id + jti)
+    M-->>F: 200 { accessToken, refreshToken, role }
+    Note over F: El token contiene solo los permisos del rol elegido
+```
+
+### Carga dinamica del menu
+
+```mermaid
+sequenceDiagram
+    actor U as Usuario
+    participant F as Frontend (Vue SPA)
+    participant M as Master (NestJS)
+    participant DB as PostgreSQL
+
+    F->>M: GET /api/menus/tree + Bearer accessToken
+    M->>M: JwtAuthGuard descifra y valida el JWE
+    alt Token invalido o expirado
+        M-->>F: 401 Unauthorized
+    else Token valido
+        M->>DB: Consulta menus activos del rol
+        DB-->>M: Filas con parentId y moduleId
+        M->>M: Construye el arbol recursivo en memoria
+        M-->>F: 200 { arbol de menus }
+        F->>F: router.addRoute() y renderiza el sidebar
+        F-->>U: Workspace disponible
+    end
+```
+
+### Validacion Zero Trust
+
+```mermaid
+sequenceDiagram
+    actor U as Usuario
+    participant F as Frontend
+    participant S as Microservicio hijo
+    participant M as Master Gateway
+
+    U->>F: Solicita una operacion del microservicio
+    F->>S: Peticion + Bearer token del Master
+    Note over S: El microservicio no confia directamente en el token
+    S->>M: POST /api/internals/validate-token
+    Note right of S: x-internal-api-key<br/>x-internal-service
+    M->>M: Valida servicio, API key y token JWE
+    alt Token o servicio no autorizado
+        M-->>S: 401 Unauthorized
+        S-->>F: 403 Forbidden
+    else Autorizado
+        M-->>S: 200 { userId, roleId, roleName }
+        S->>S: Ejecuta la logica de negocio
+        S-->>F: Respuesta del dominio
+        F-->>U: Muestra el resultado
+    end
+```
+
+### Pipeline CI/CD
+
+```mermaid
+sequenceDiagram
+    actor Dev as Desarrollador
+    participant GH as GitHub Actions
+    participant ST as Self-test SAST
+    participant SQ as SonarQube
+    participant R as Render
+    participant TG as Telegram
+
+    Dev->>GH: Push a rama de trabajo
+    GH->>GH: Build, unitarias y e2e
+    GH->>ST: Ejecuta fixtures y reglas SAST
+    ST-->>GH: Resultado de seguridad
+    GH->>SQ: Analisis y Quality Gate
+    alt Un gate falla
+        GH-->>Dev: PR bloqueado
+        GH->>TG: Notifica el fallo
+    else Gates aprobados
+        GH->>GH: Promueve dev a test y test a main
+        GH->>R: Despliega backend y frontend
+        R-->>GH: Deploy completado
+        GH->>GH: Verifica health, Vue y CORS
+        GH->>TG: Notifica el resultado
+    end
+```
+
+### Registro de un microservicio externo
+
+```mermaid
+sequenceDiagram
+    actor A as Administrador
+    participant F as Frontend
+    participant M as Master Gateway
+    participant EXT as Microservicio
+    participant DB as PostgreSQL
+
+    A->>F: Ingresa datos y prueba la conexion
+    F->>M: POST /api/external-services/probe
+    M->>M: Valida URL con SSRF Guard
+    M->>EXT: GET healthPath sin redirects
+    EXT-->>M: Health y metadatos
+    M-->>F: reachable + endpoints descubiertos
+
+    A->>F: Selecciona endpoints, menus y roles
+    F->>M: POST /api/external-services
+    M->>EXT: Revalida disponibilidad
+    M->>DB: Registra el servicio
+    F->>M: POST /api/external-services/:id/provision
+    M->>DB: Transaccion de modulo, menus, rutas y roles
+    DB-->>M: Provision completada
+    M-->>F: Servicio y menus creados
+    F->>M: GET /api/menus/tree
+    M-->>F: Arbol actualizado
+    F->>F: Registra las nuevas rutas dinamicas
+```
+
 ## Endpoints principales
 
 ### Autenticacion
