@@ -8,11 +8,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Estado } from '@prisma/client';
+import { Estado, ExternalService } from '@prisma/client';
 import { AuthenticatedUser } from '../common/auth/authenticated-user';
 import { RequestWithUser } from '../common/auth/request-with-user';
 import { assertSafeProbeTarget } from '../external-services/ssrf-guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { ServiceIdentityService } from './service-identity.service';
 
 const DEFAULT_PROXY_TIMEOUT_MS = 10_000;
 const FULL_ACCESS_ROLE_NAMES = ['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN'];
@@ -56,6 +57,7 @@ export class ServiceProxyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly serviceIdentityService: ServiceIdentityService,
   ) {}
 
   async forward(request: RequestWithUser): Promise<ProxyResult> {
@@ -90,7 +92,7 @@ export class ServiceProxyService {
     try {
       const upstream = await fetch(target, {
         method,
-        headers: this.buildHeaders(request, user),
+        headers: this.buildHeaders(request, user, route.service),
         body: this.buildBody(request, method),
         redirect: 'manual',
         signal: AbortSignal.timeout(this.proxyTimeoutMs()),
@@ -208,7 +210,7 @@ export class ServiceProxyService {
     const roles = configured
       ? configured
           .split(',')
-          .map((role) => role.trim())
+          .map((role: string) => role.trim())
           .filter(Boolean)
       : FULL_ACCESS_ROLE_NAMES;
     return roles.includes(roleName);
@@ -232,7 +234,11 @@ export class ServiceProxyService {
     return new URL(`${path}${query}`, normalizedBase);
   }
 
-  private buildHeaders(request: RequestWithUser, user: AuthenticatedUser) {
+  private buildHeaders(
+    request: RequestWithUser,
+    user: AuthenticatedUser,
+    service: ExternalService,
+  ) {
     const headers = new Headers();
 
     for (const [name, rawValue] of Object.entries(request.headers)) {
@@ -251,6 +257,12 @@ export class ServiceProxyService {
     headers.set('x-gateway-user-id', user.sub);
     headers.set('x-gateway-role-id', user.roleId);
     headers.set('x-gateway-role-name', user.roleName);
+
+    const identityHeaders =
+      this.serviceIdentityService.buildIdentityHeaders(service);
+    for (const [name, value] of Object.entries(identityHeaders)) {
+      headers.set(name, value);
+    }
 
     return headers;
   }

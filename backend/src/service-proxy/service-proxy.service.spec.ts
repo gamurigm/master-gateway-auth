@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Estado } from '@prisma/client';
 import { ServiceProxyService } from './service-proxy.service';
+import { ServiceIdentityService } from './service-identity.service';
 import type { RequestWithUser } from '../common/auth/request-with-user';
 import type { PrismaService } from '../prisma/prisma.service';
 
@@ -14,8 +15,12 @@ const route = {
   estado: Estado.ACTIVO,
   service: {
     id: 'service-id',
+    code: 'INVENTARIO',
     baseUrl: 'http://127.0.0.1:3001',
     estado: Estado.ACTIVO,
+    authenticationType: 'JWT',
+    apiKey: 'sk-inv-secret',
+    name: 'Inventario',
   },
   menu: {
     id: 'menu-id',
@@ -46,6 +51,7 @@ function createRequest(roleName = 'SUPER_ADMIN'): RequestWithUser {
 
 describe('ServiceProxyService', () => {
   let prisma: {
+    externalService: { findUnique: jest.Mock };
     externalServiceRoute: { findMany: jest.Mock };
     roleMenu: { count: jest.Mock };
   };
@@ -55,6 +61,9 @@ describe('ServiceProxyService', () => {
   beforeEach(() => {
     process.env['ALLOW_PRIVATE_PROBE_TARGETS'] = 'true';
     prisma = {
+      externalService: {
+        findUnique: jest.fn().mockResolvedValue({ apiKey: 'sk-inv-secret' }),
+      },
       externalServiceRoute: { findMany: jest.fn().mockResolvedValue([route]) },
       roleMenu: { count: jest.fn().mockResolvedValue(0) },
     };
@@ -68,6 +77,7 @@ describe('ServiceProxyService', () => {
     service = new ServiceProxyService(
       prisma as unknown as PrismaService,
       new ConfigService(),
+      new ServiceIdentityService(prisma as unknown as PrismaService),
     );
   });
 
@@ -76,7 +86,7 @@ describe('ServiceProxyService', () => {
     delete process.env['ALLOW_PRIVATE_PROBE_TARGETS'];
   });
 
-  it('reenvia al baseUrl del servicio sin filtrar el token al micro', async () => {
+  it('reenvia al baseUrl del servicio y agrega headers de identidad', async () => {
     const result = await service.forward(createRequest());
 
     expect(result.statusCode).toBe(200);
@@ -87,6 +97,10 @@ describe('ServiceProxyService', () => {
     const headers = fetchMock.mock.calls[0][1].headers as Headers;
     expect(headers.get('authorization')).toBeNull();
     expect(headers.get('x-gateway-user-id')).toBe('user-id');
+    expect(headers.get('x-gateway-service-id')).toBe('service-id');
+    expect(headers.get('x-gateway-service-code')).toBe('INVENTARIO');
+    expect(headers.get('x-gateway-api-key')).toBe('sk-inv-secret');
+    expect(headers.get('x-request-id')).toBe('req-1');
     expect(prisma.roleMenu.count).not.toHaveBeenCalled();
   });
 

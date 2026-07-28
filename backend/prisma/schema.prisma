@@ -101,6 +101,8 @@ model ExternalService {
   openApiPath String?                @map("openapi_path")
   /// Estrategia de autenticacion que usa el servicio (JWT, API_KEY, MTLS, OIDC, NONE).
   authenticationType String?          @default("JWT") @map("tipo_autenticacion")
+  /// API Key unica por servicio para autenticacion entre el Gateway y el micro.
+  apiKey            String?           @map("api_key")
   /// Resultado de la ultima comprobacion de disponibilidad.
   lastProbeAt DateTime?              @map("ultima_verificacion")
   lastProbeOk Boolean?               @map("ultima_verificacion_ok")

@@ -137,6 +137,22 @@ services:
       retries: 12
       start_period: 30s
 
+  inventario:
+    build:
+      context: ./services/inventario
+      dockerfile: Dockerfile
+    container_name: master-gateway-inventario
+    restart: unless-stopped
+    environment:
+      INVENTARIO_PORT: "3007"
+      MASTER_VALIDATE_URL: http://backend:3000/api/internals/validate-token
+      MASTER_INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-docker-internal-key}
+      MASTER_INTERNAL_SERVICE_NAME: inventario
+      INVENTARIO_ALLOWED_ROLES: SUPERADMIN,ADMIN,INVENTARIO
+      FRONTEND_ORIGIN: http://localhost:4200
+    expose:
+      - "3007"
+
   register-backend:
     image: node:24.15.0-bookworm-slim
     container_name: master-gateway-register-backend

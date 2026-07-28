@@ -21,6 +21,22 @@
         <div class="field">
           <label>Ruta (URL)</label><input v-model="form.url">
         </div>
+        <div v-if="showProxyFields" class="proxy-section">
+          <h3>Proxy a microservicio</h3>
+          <div class="field">
+            <label>URL destino</label>
+            <input v-model="form.targetUrl" placeholder="http://inventario:3007/inventario/productos">
+            <p class="help">URL completa del endpoint en el microservicio</p>
+          </div>
+          <div class="field">
+            <label>Métodos HTTP</label>
+            <div class="checkbox-group">
+              <label v-for="m in ['GET','POST','PUT','PATCH','DELETE']" :key="m">
+                <input type="checkbox" :value="m" v-model="form.methods"> {{ m }}
+              </label>
+            </div>
+          </div>
+        </div>
         <div class="field">
           <label>Icono</label><input v-model="form.icon">
         </div>
@@ -93,7 +109,9 @@ const saving = ref(false)
 const error = ref('')
 const allModules = ref<SystemModule[]>([])
 const allMenus = ref<Menu[]>([])
-const form = ref({ name: '', url: '', icon: '', order: 0, moduleId: '', parentId: '' })
+const form = ref({ name: '', url: '', icon: '', order: 0, moduleId: '', parentId: '', targetUrl: '', methods: ['GET'] as string[] })
+
+const showProxyFields = computed(() => form.value.url.startsWith('/app/'))
 
 async function saveMenu() {
   saving.value = true; error.value = ''
@@ -103,6 +121,8 @@ async function saveMenu() {
     if (form.value.icon) dto.icon = form.value.icon
     if (form.value.order) dto.order = form.value.order
     if (form.value.parentId) dto.parentId = form.value.parentId
+    if (form.value.targetUrl) dto.targetUrl = form.value.targetUrl
+    if (form.value.methods?.length) dto.methods = form.value.methods
     if (isEdit.value) await menuService.update(route.params.id as string, dto)
     else await menuService.create(dto as { name: string; moduleId: string })
     await menuStore.load(router, true)
@@ -118,7 +138,11 @@ onMounted(async () => {
   } catch {}
   if (isEdit.value) {
     const { data } = await menuService.findOne(route.params.id as string)
-    form.value = { name: data.name, url: data.url || '', icon: data.icon || '', order: data.order, moduleId: data.moduleId, parentId: data.parentId || '' }
+    form.value = {
+      name: data.name, url: data.url || '', icon: data.icon || '', order: data.order,
+      moduleId: data.moduleId, parentId: data.parentId || '',
+      targetUrl: data.targetUrl || '', methods: data.methods || ['GET'],
+    }
   }
 })
 </script>

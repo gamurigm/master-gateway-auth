@@ -17,6 +17,8 @@ export type MenuTreeNode = {
   children: MenuTreeNode[];
 };
 
+const HIDDEN_SERVICE_PREFIX = '_route_';
+
 @Injectable()
 export class MenusService {
   constructor(private readonly prisma: PrismaService) {}
@@ -100,6 +102,13 @@ export class MenusService {
       await this.ensureParentInModule(dto.parentId, dto.moduleId);
     }
 
+    if (dto.targetUrl) {
+      return this.createWithRoute(
+        dto as CreateMenuDto & { targetUrl: string; methods?: string[] },
+        actorId,
+      );
+    }
+
     return this.prisma.menu.create({
       data: {
         name: dto.name,
@@ -123,6 +132,94 @@ export class MenusService {
       await this.ensureParentInModule(dto.parentId, nextModuleId);
     }
 
+    const existingRoute = await this.prisma.externalServiceRoute.findFirst({
+      where: { menuId: id, estado: Estado.ACTIVO },
+      include: { service: true },
+    });
+
+    if (dto.targetUrl !== undefined) {
+      if (dto.targetUrl) {
+        const url = new URL(dto.targetUrl);
+        const targetPath = url.pathname;
+
+        if (existingRoute) {
+          await this.prisma.$transaction(async (tx) => {
+            await tx.externalServiceRoute.update({
+              where: { id: existingRoute.id },
+              data: {
+                targetPath,
+                methods: dto.methods ?? existingRoute.methods,
+                updatedBy: actorId,
+              },
+            });
+            await tx.externalService.update({
+              where: { id: existingRoute.serviceId },
+              data: {
+                baseUrl: `${url.protocol}//${url.host}`,
+                updatedBy: actorId,
+              },
+            });
+            await tx.menu.update({
+              where: { id },
+              data: {
+                name: dto.name,
+                url: dto.url,
+                icon: dto.icon,
+                order: dto.order,
+                moduleId: dto.moduleId,
+                parentId: dto.parentId,
+                updatedBy: actorId,
+              },
+            });
+          });
+          return this.prisma.menu.findUnique({ where: { id } });
+        }
+
+        return this.createWithRoute(
+          {
+            name: dto.name ?? current.name,
+            url: dto.url ?? current.url ?? undefined,
+            icon: dto.icon ?? current.icon ?? undefined,
+            order: dto.order ?? current.order,
+            moduleId: nextModuleId,
+            parentId: dto.parentId ?? current.parentId ?? undefined,
+            targetUrl: dto.targetUrl,
+            methods: dto.methods,
+          },
+          actorId,
+          id,
+        );
+      }
+
+      if (existingRoute) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.externalServiceRoute.update({
+            where: { id: existingRoute.id },
+            data: { estado: Estado.INACTIVO, updatedBy: actorId },
+          });
+          if (existingRoute.service.code.startsWith(HIDDEN_SERVICE_PREFIX)) {
+            await tx.externalService.update({
+              where: { id: existingRoute.serviceId },
+              data: { estado: Estado.INACTIVO, updatedBy: actorId },
+            });
+          }
+          await tx.menu.update({
+            where: { id },
+            data: {
+              name: dto.name,
+              url: dto.url,
+              icon: dto.icon,
+              order: dto.order,
+              moduleId: dto.moduleId,
+              parentId: dto.parentId,
+              updatedBy: actorId,
+            },
+          });
+        });
+        return this.prisma.menu.findUnique({ where: { id } });
+      }
+    }
+
     return this.prisma.menu.update({
       where: { id },
       data: {
@@ -137,19 +234,102 @@ export class MenusService {
     });
   }
 
+  private async createWithRoute(
+    dto: CreateMenuDto & { targetUrl: string; methods?: string[] },
+    actorId: string,
+    existingMenuId?: string,
+  ) {
+    const url = new URL(dto.targetUrl);
+    const baseUrl = `${url.protocol}//${url.host}`;
+    const targetPath = url.pathname;
+    const publicPath = this.toProxyPublicPath(dto.url ?? targetPath);
+    const methods = dto.methods ?? ['GET'];
+
+    return this.prisma.$transaction(async (tx) => {
+      const serviceCode = `${HIDDEN_SERVICE_PREFIX}${existingMenuId ?? crypto.randomUUID()}`;
+
+      const externalService = await tx.externalService.create({
+        data: {
+          code: serviceCode,
+          name: `Ruta: ${dto.name}`,
+          baseUrl,
+          healthPath: '/health',
+          estado: Estado.ACTIVO,
+          createdBy: actorId,
+        },
+      });
+
+      const menu = existingMenuId
+        ? await tx.menu.update({
+            where: { id: existingMenuId },
+            data: {
+              name: dto.name,
+              url: dto.url,
+              icon: dto.icon,
+              order: dto.order,
+              moduleId: dto.moduleId,
+              parentId: dto.parentId,
+              updatedBy: actorId,
+            },
+          })
+        : await tx.menu.create({
+            data: {
+              name: dto.name,
+              url: dto.url,
+              icon: dto.icon,
+              order: dto.order,
+              moduleId: dto.moduleId,
+              parentId: dto.parentId,
+              createdBy: actorId,
+            },
+          });
+
+      await tx.externalServiceRoute.create({
+        data: {
+          serviceId: externalService.id,
+          menuId: menu.id,
+          publicPath,
+          targetPath,
+          methods,
+          createdBy: actorId,
+        },
+      });
+
+      return menu;
+    });
+  }
+
   async remove(id: string, actorId: string) {
     await this.ensureActiveMenu(id);
     const menuIds = await this.collectActiveSubtreeIds(id);
 
     await this.prisma.$transaction(async (tx) => {
+      const routes = await tx.externalServiceRoute.findMany({
+        where: { menuId: { in: menuIds }, estado: Estado.ACTIVO },
+        include: { service: true },
+      });
+
       await tx.roleMenu.updateMany({
         where: { menuId: { in: menuIds }, estado: Estado.ACTIVO },
         data: { estado: Estado.INACTIVO, updatedBy: actorId },
       });
+
       await tx.externalServiceRoute.updateMany({
         where: { menuId: { in: menuIds }, estado: Estado.ACTIVO },
         data: { estado: Estado.INACTIVO, updatedBy: actorId },
       });
+
+      const hiddenServiceIds = routes
+        .filter((r) => r.service.code.startsWith(HIDDEN_SERVICE_PREFIX))
+        .map((r) => r.service.id);
+
+      if (hiddenServiceIds.length > 0) {
+        await tx.externalService.updateMany({
+          where: { id: { in: hiddenServiceIds }, estado: Estado.ACTIVO },
+          data: { estado: Estado.INACTIVO, updatedBy: actorId },
+        });
+      }
+
       await tx.menu.updateMany({
         where: { id: { in: menuIds }, estado: Estado.ACTIVO },
         data: { estado: Estado.INACTIVO, updatedBy: actorId },
@@ -157,6 +337,10 @@ export class MenusService {
     });
 
     return { success: true };
+  }
+
+  private toProxyPublicPath(menuUrl: string) {
+    return `/${menuUrl.replace(/^\/app\/?/, '').replace(/^\/+/, '')}`;
   }
 
   private async collectActiveSubtreeIds(rootId: string) {

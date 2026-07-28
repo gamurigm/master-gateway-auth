@@ -102,6 +102,8 @@ jobs:
       has_security_relevant: ${{ steps.filter.outputs.has_security_relevant }}
       services_matrix: ${{ steps.services.outputs.matrix }}
       has_services: ${{ steps.services.outputs.has_services }}
+      new_services_matrix: ${{ steps.services.outputs.new_matrix }}
+      has_new_services: ${{ steps.services.outputs.has_new_services }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -198,6 +200,34 @@ jobs:
           echo "has_services=$HAS_SERVICES" >> "$GITHUB_OUTPUT"
           echo "Detected services matrix: $MATRIX"
 
+          # Detectar servicios NUEVOS (no existían en la rama base)
+          NEW_MATRIX='{"include":[]}'
+          HAS_NEW="false"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1 2>/dev/null || true
+            MAIN_SERVICES=$(git ls-tree -d --name-only "origin/${{ github.base_ref }}" services/ 2>/dev/null | sed 's|services/||' || true)
+            NEW_NAMES=()
+            for svc in "${SERVICES[@]}"; do
+              if ! echo "$MAIN_SERVICES" | grep -qx "$svc"; then
+                NEW_NAMES+=("$svc")
+              fi
+            done
+            if [ ${#NEW_NAMES[@]} -gt 0 ]; then
+              HAS_NEW="true"
+              NEW_MATRIX='{"include":['
+              FIRST=true
+              for svc in "${NEW_NAMES[@]}"; do
+                if [ "$FIRST" = true ]; then FIRST=false; else NEW_MATRIX="$NEW_MATRIX,"; fi
+                NEW_MATRIX="$NEW_MATRIX{\"service\":\"$svc\"}"
+              done
+              NEW_MATRIX="$NEW_MATRIX]}"
+            fi
+          fi
+
+          echo "new_matrix=$NEW_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "has_new_services=$HAS_NEW" >> "$GITHUB_OUTPUT"
+          echo "New services matrix: $NEW_MATRIX"
+
   # ──────────────────────────────────────────────────────────────
   # Build + Tests (siempre corre, es la base de todo)
   # ──────────────────────────────────────────────────────────────
@@ -276,6 +306,74 @@ jobs:
           else
             echo "No package.json found for ${{ matrix.service }} - skipping"
           fi
+
+      - name: Docker build ${{ matrix.service }}
+        run: |
+          if [ -f "services/${{ matrix.service }}/Dockerfile" ]; then
+            docker build -t "master-gateway-${{ matrix.service }}:ci" \
+              -f "services/${{ matrix.service }}/Dockerfile" \
+              "services/${{ matrix.service }}"
+            echo "Docker image built: master-gateway-${{ matrix.service }}:ci"
+          else
+            echo "No Dockerfile for ${{ matrix.service }} - skipping"
+          fi
+
+  # ──────────────────────────────────────────────────────────────
+  # Security scan para servicios NUEVOS (no existían en main).
+  # Corre trivy (image + fs) + sonar análisis para cada nuevo servicio.
+  # ──────────────────────────────────────────────────────────────
+  services-security:
+    needs: [detect-changes, services-build]
+    if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      needs.detect-changes.outputs.has_new_services == 'true' &&
+      (needs.services-build.result == 'success' || needs.services-build.result == 'skipped')
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(needs.detect-changes.outputs.new_services_matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: npm
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Generate Prisma Client
+        run: npm run prisma:generate
+
+      - name: Run trivy filesystem scan on ${{ matrix.service }}
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          scan-type: fs
+          scan-ref: services/${{ matrix.service }}
+          format: sarif
+          output: reports/trivy-${{ matrix.service }}.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload trivy SARIF for ${{ matrix.service }}
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}
+
+      - name: Sonar analysis for ${{ matrix.service }}
+        run: |
+          npm run sonar:scan -- \
+            -Dsonar.sources="services/${{ matrix.service }}/src" \
+            -Dsonar.projectName="Master Gateway - ${{ matrix.service }}" \
+            -Dsonar.projectKey="master-gateway-${{ matrix.service }}" \
+            -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/coverage/**"
 
   # ──────────────────────────────────────────────────────────────
   # ESTRATEGIA 2 + 4: SonarQube corre ANTES de CodeBERT en main

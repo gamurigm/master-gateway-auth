@@ -183,6 +183,8 @@ export interface Menu {
   updatedAt: string
   module?: SystemModule
   parent?: Menu
+  targetUrl?: string | null
+  methods?: string[]
 }
 
 export interface CreateMenuDto {
@@ -192,6 +194,8 @@ export interface CreateMenuDto {
   order?: number
   moduleId: string
   parentId?: string
+  targetUrl?: string
+  methods?: string[]
 }
 
 export interface UpdateMenuDto {
@@ -201,6 +205,8 @@ export interface UpdateMenuDto {
   order?: number
   moduleId?: string
   parentId?: string
+  targetUrl?: string
+  methods?: string[]
 }
 
 export interface ExternalService {
