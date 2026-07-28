@@ -18,6 +18,17 @@ if [ -z "${GH_TOKEN:-}" ]; then
   exit 1
 fi
 
+ahead_by="$(
+  gh api \
+    "repos/${repository}/compare/${target_branch}...${source_branch}" \
+    --jq '.ahead_by'
+)"
+
+if [ "$ahead_by" = "0" ]; then
+  echo "Promocion ${source_branch} -> ${target_branch} omitida: las ramas ya estan sincronizadas."
+  exit 0
+fi
+
 pr_number="$(
   gh pr list \
     --repo "$repository" \
