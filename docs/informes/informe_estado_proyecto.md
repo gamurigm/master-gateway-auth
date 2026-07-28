@@ -1,8 +1,9 @@
 # Informe de Estado del Proyecto: Master Gateway de Autenticación y Autorización
 
-Estado del proyecto frente a los requisitos de `proyectoIII.md` y su anexo de
-infraestructura. Actualizado tras cerrar las fases de agente SAST, seeds,
-diagramas, registro de microservicios externos y Kubernetes.
+Estado del proyecto frente a los requisitos de
+[`proyectoIII.md`](../requisitos/proyectoIII.md) y su anexo de infraestructura.
+Actualizado tras cerrar las fases de agente SAST, seeds, diagramas, registro de
+microservicios externos y Kubernetes.
 
 ## Estado general: **Funcionalmente completo**
 

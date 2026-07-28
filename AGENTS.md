@@ -936,7 +936,7 @@ backend/src/external-services/ssrf-guard.ts
 
 docs/seguridad.md
 
-INFORME_AUDITORIA_SEGURIDAD.md
+docs/auditoria/INFORME_AUDITORIA_SEGURIDAD.md
 
 ---
 

@@ -3,7 +3,8 @@
 Fecha de inicio: 2026-07-15
 
 Este documento conserva la evidencia de los fallos encontrados durante la
-validación del proyecto contra `PROY_PARCIAL_III_DesSeguro_202650.pdf` y de las
+validación del proyecto contra
+`docs/requisitos/PROY_PARCIAL_III_DesSeguro_202650.pdf` y de las
 correcciones aplicadas. No contiene secretos ni valores sensibles.
 
 ## Flujo exigido por el PDF
