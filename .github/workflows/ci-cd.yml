@@ -300,12 +300,18 @@ jobs:
       # las variables ${...:?} del bloque backend. Estos valores son de usar y
       # tirar: los contenedores de Sonar nunca los leen. Los secretos reales
       # llegan por GitHub Secrets al job de deploy.
+      #
+      # IMPORTANTE: si añades un `${VAR:?}` nuevo a docker-compose.yml, tienes
+      # que declararlo también aquí o este job falla al interpolar, tanto en
+      # `compose up` como en `compose down`. El paso "Verify compose
+      # interpolation" comprueba justo eso y falla con un mensaje claro.
       JWT_SECRET: ci-sonar-placeholder-not-used
       JWE_SECRET: ci-sonar-placeholder-32bytes-xxx
       TEMP_JWT_SECRET: ci-sonar-placeholder-not-used
       REFRESH_JWT_SECRET: ci-sonar-placeholder-not-used
       INTERNAL_API_KEY: ci-sonar-placeholder-not-used
       SEED_ADMIN_PASSWORD: ci-sonar-placeholder-not-used
+      SEED_SUPER_ADMIN_PASSWORD: ci-sonar-placeholder-not-used
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -326,6 +332,20 @@ jobs:
 
       - name: Backend coverage
         run: npm run test:coverage
+
+      # Falla rapido y con un mensaje claro si docker-compose.yml gana una
+      # variable obligatoria que este job no declara. Sin esto el error aparece
+      # enterrado dentro de `compose up` y ademas rompe el `compose down` del
+      # paso de limpieza, dejando contenedores huerfanos.
+      - name: Verify compose interpolation
+        run: |
+          if ! docker compose config --quiet 2>/tmp/compose-err; then
+            echo "::error::docker-compose.yml no interpola con las variables de este job."
+            echo "::error::Declara la variable que falta en el bloque 'env:' del job sonarqube."
+            cat /tmp/compose-err
+            exit 1
+          fi
+          echo "docker-compose.yml interpola correctamente."
 
       - name: Start SonarQube Community
         run: |
