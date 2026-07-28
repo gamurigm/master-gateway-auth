@@ -82,4 +82,10 @@ export class CreateExternalServiceDto {
     message: 'authenticationType debe ser JWT, API_KEY, MTLS, OIDC o NONE',
   })
   authenticationType?: string;
+
+  @Sanitize()
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  apiKey?: string;
 }
