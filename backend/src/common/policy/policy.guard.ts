@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { PolicyService } from './policy.service';
 import { POLICY_ACTION_KEY } from './policy.decorator';
+import { REQUIRED_PERMISSIONS_KEY } from '../auth/permissions.decorator';
 import type { RequestWithUser } from '../auth/request-with-user';
 
 /**
@@ -30,7 +31,14 @@ export class PolicyGuard implements CanActivate {
       resource: string;
     } | null>(POLICY_ACTION_KEY, [context.getHandler(), context.getClass()]);
 
-    const action = policyMeta?.action ?? this.inferAction(context);
+    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
+      REQUIRED_PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    const action =
+      policyMeta?.action ??
+      requiredPermissions?.[0] ??
+      this.inferAction(context);
     const resource = policyMeta?.resource ?? '';
 
     const request = context.switchToHttp().getRequest<RequestWithUser>();
