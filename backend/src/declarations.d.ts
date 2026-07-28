@@ -16,7 +16,7 @@ declare module '@nestjs/config' {
 }
 
 declare module '@nestjs/throttler' {
-  import { CanActivate, DynamicModule, Type } from '@nestjs/common';
+  import { CanActivate, DynamicModule } from '@nestjs/common';
   export class ThrottlerGuard implements CanActivate {
     canActivate(): boolean | Promise<boolean>;
   }
@@ -28,7 +28,9 @@ declare module '@nestjs/throttler' {
     ttl?: number;
     blockDuration?: number;
   }
-  export function Throttle(options?: Record<string, ThrottlerModuleOptions>): MethodDecorator & ClassDecorator;
+  export function Throttle(
+    options?: Record<string, ThrottlerModuleOptions>,
+  ): MethodDecorator & ClassDecorator;
 }
 
 declare module '@nestjs/serve-static' {
