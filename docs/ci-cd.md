@@ -112,6 +112,8 @@ feature/* -> dev -> test -> main -> deploy
 - Un pipeline exitoso en `dev` crea o reutiliza el PR `dev -> test` y activa auto-merge.
 - Un pipeline exitoso en `test`, incluido CodeBERT cuando aplica, crea o reutiliza el PR
   `test -> main` y activa auto-merge.
+- Las promociones son idempotentes: si la rama destino ya contiene todos los commits de
+  origen, el job termina exitosamente sin crear un PR vacio.
 - Un fallo, cancelacion, conflicto o check pendiente mantiene el PR abierto y bloquea la promocion.
 - Solo el merge en `main` ejecuta SonarQube, los gates completos y el despliegue.
 
@@ -129,6 +131,11 @@ self-test y escaneos aplicables para usarlo como required status check.
 4. Proteger `dev`, `test` y `main`: exigir Pull Request, exigir el check `promotion-ready`,
    bloquear force-push y bloquear eliminacion de rama.
 5. No conceder bypass sobre `main`; el check `branch-flow` garantiza que su PR nazca de `test`.
+
+`dev` exige que la rama de trabajo este actualizada antes del merge. En `test` y `main`, el
+required check no usa modo estricto porque cada merge commit hace que la rama destino quede
+topologicamente adelantada respecto del origen. La seguridad se conserva porque `branch-flow`
+limita los origenes a `dev -> test` y `test -> main`.
 
 Antes de activar la primera promocion hay que sincronizar las ramas historicamente divergentes.
 Una vez alineadas, todo cambio nuevo debe entrar por una rama creada desde `dev`.
