@@ -25,6 +25,8 @@ jobs:
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_BACKEND_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_FRONTEND_SERVICE_ID: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
+          RENDER_FRONTEND_BRANCH: deploy/frontend-test
         run: bash scripts/configure-render-frontend.sh
 
       - name: Install Render CLI
