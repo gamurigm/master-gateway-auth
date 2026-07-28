@@ -1,9 +1,16 @@
 name: Deploy Frontend Test
 
+# SOLO disparo manual: ver la nota en deploy-render-test.yml. Un `push` ya no
+# puede desplegar saltandose los gates del pipeline principal.
 on:
-  push:
-    branches:
-      - deploy/frontend-test
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: 'Motivo del despliegue manual sin gates'
+        required: true
+
+permissions:
+  contents: read
 
 jobs:
   deploy-frontend:

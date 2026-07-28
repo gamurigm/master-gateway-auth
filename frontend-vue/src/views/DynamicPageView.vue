@@ -92,6 +92,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { MenuNode } from '../types'
 import api from '../services/api'
+import { internalAppPath, safeExternalUrl } from '../utils/safe-url'
 import AppIcon from '../components/AppIcon.vue'
 
 const route = useRoute()
@@ -100,13 +101,10 @@ const error = ref('')
 const payload = ref('')
 
 const menu = computed(() => route.meta.menu as MenuNode | undefined)
-const externalUrl = computed(() => {
-  const url = menu.value?.url ?? ''
-  return /^https?:\/\//i.test(url) ? url : null
-})
+const externalUrl = computed(() => safeExternalUrl(menu.value?.url))
 const proxyPath = computed(() => {
-  const url = menu.value?.url ?? ''
-  if (!url.startsWith('/app/')) return null
+  const url = internalAppPath(menu.value?.url)
+  if (!url) return null
   return `/proxy/${url.replace(/^\/app\/?/, '')}`
 })
 

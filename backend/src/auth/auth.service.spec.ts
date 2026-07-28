@@ -5,7 +5,7 @@ import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { generateKeyPairSync } from 'node:crypto';
 import type { Algorithm } from 'jsonwebtoken';
-import { EncryptJWT, importPKCS8, importSPKI, jwtDecrypt } from 'jose';
+import { importPKCS8, importSPKI, jwtVerify, SignJWT } from 'jose';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 
@@ -66,6 +66,9 @@ describe('AuthService', () => {
     userRole: {
       findFirst: jest.fn(),
     },
+    rolePermission: {
+      findMany: jest.fn(),
+    },
     refreshToken: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -95,6 +98,10 @@ describe('AuthService', () => {
     prisma.refreshToken.create.mockResolvedValue({});
     prisma.refreshToken.update.mockResolvedValue({});
     prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+    prisma.rolePermission.findMany.mockResolvedValue([
+      { permission: { code: 'users:read' } },
+      { permission: { code: 'roles:read' } },
+    ]);
   });
 
   it('login returns a temp token, active roles, and no password hash', async () => {
@@ -151,12 +158,13 @@ describe('AuthService', () => {
     });
 
     const result = await service.selectRole({ tempToken, roleId: ROLE_ID });
-    const { payload: accessPayload } = await jwtDecrypt(
+    const { payload: accessPayload } = await jwtVerify(
       result.accessToken,
-      await importPKCS8(privateKey, 'RSA-OAEP-256'),
+      await importSPKI(publicKey, 'RS256'),
       {
         issuer: 'master-gateway',
         audience: 'master-gateway-clients',
+        algorithms: ['RS256'],
       },
     );
 
@@ -164,6 +172,9 @@ describe('AuthService', () => {
       sub: USER_ID,
       roleId: ROLE_ID,
       roleName: 'ADMIN',
+      token_use: 'access',
+      // Menor privilegio (§6.2): solo los permisos del rol elegido.
+      permissions: ['roles:read', 'users:read'],
     });
     expect(result.role).toEqual({ id: ROLE_ID, name: 'ADMIN' });
     const createMock = prisma.refreshToken.create as jest.Mock<
@@ -304,12 +315,77 @@ describe('AuthService', () => {
     });
   });
 
+  it('validateInternal returns the role permissions to the child service', async () => {
+    // El PDF (Figura 3) especifica {userId, role, permissions} en la respuesta.
+    const tempToken = await jwtService.signAsync(
+      { sub: USER_ID, email: EMAIL },
+      { expiresIn: '5m' },
+    );
+    prisma.userRole.findFirst.mockResolvedValue({
+      role: { id: ROLE_ID, name: 'ADMIN' },
+    });
+    const session = await service.selectRole({ tempToken, roleId: ROLE_ID });
+
+    await expect(
+      service.validateInternal(
+        'test-internal-key',
+        session.accessToken,
+        'ventas',
+      ),
+    ).resolves.toMatchObject({
+      valid: true,
+      permissions: ['roles:read', 'users:read'],
+    });
+  });
+
+  it('validateInternal rejects a refresh token presented as an access token', async () => {
+    const refreshToken = await createRefreshToken('cross-use-jti');
+
+    await expect(
+      service.validateInternal('test-internal-key', refreshToken, 'ventas'),
+    ).resolves.toEqual({ valid: false });
+  });
+
+  it('refresh rejects a token already consumed concurrently', async () => {
+    // Carrera: dos peticiones simultaneas con el mismo refresh token superaban
+    // ambas las comprobaciones de solo lectura y generaban DOS familias
+    // validas. El consumo atomico hace que la segunda obtenga count = 0.
+    const refreshToken = await createRefreshToken('raced-jti');
+    const tokenHash = await argon2.hash(refreshToken, {
+      type: argon2.argon2id,
+    });
+    prisma.refreshToken.findUnique.mockResolvedValue({
+      id: 'stored-token-id',
+      userId: USER_ID,
+      roleId: ROLE_ID,
+      tokenHash,
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      replacedByJti: null,
+      estado: Estado.ACTIVO,
+      role: { name: 'ADMIN' },
+    });
+    // La otra peticion gano la carrera: el consumo condicional no afecta filas.
+    prisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.refresh(refreshToken)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+  });
+
   const createRefreshToken = async (jti: string) =>
-    new EncryptJWT({ sub: USER_ID, roleId: ROLE_ID, roleName: 'ADMIN', jti })
-      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
+    new SignJWT({
+      roleId: ROLE_ID,
+      roleName: 'ADMIN',
+      jti,
+      token_use: 'refresh',
+    })
+      .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
+      .setSubject(USER_ID)
       .setIssuedAt()
       .setExpirationTime('7d')
       .setIssuer('master-gateway')
       .setAudience('master-gateway-clients')
-      .encrypt(await importSPKI(publicKey, 'RSA-OAEP-256'));
+      .sign(await importPKCS8(privateKey, 'RS256'));
 });

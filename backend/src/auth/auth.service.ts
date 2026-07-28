@@ -8,9 +8,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Estado } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { EncryptJWT, importSPKI } from 'jose';
 import { createHash, randomUUID } from 'node:crypto';
-import { decryptGatewayToken } from '../common/auth/jwe-token';
+import {
+  signGatewayToken,
+  verifyGatewayToken,
+} from '../common/auth/gateway-token';
 import { omitPassword } from '../common/utils/omit-password';
 import { KeysService } from '../common/keys/keys.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,13 +25,6 @@ type TempTokenPayload = {
   email: string;
 };
 
-type GatewayTokenPayload = {
-  sub: string;
-  jti: string;
-  roleId: string;
-  roleName?: string;
-};
-
 type SessionTokens = {
   accessToken: string;
   refreshToken: string;
@@ -37,6 +32,7 @@ type SessionTokens = {
   tokenType: string;
   expiresIn: string;
   role: { id: string; name: string };
+  permissions: string[];
 };
 
 @Injectable()
@@ -162,18 +158,7 @@ export class AuthService {
     }
 
     if (storedToken.revokedAt || storedToken.replacedByJti) {
-      await this.prisma.refreshToken.updateMany({
-        where: {
-          userId: storedToken.userId,
-          roleId: storedToken.roleId,
-          estado: Estado.ACTIVO,
-        },
-        data: {
-          revokedAt: new Date(),
-          reuseDetected: true,
-          estado: Estado.INACTIVO,
-        },
-      });
+      await this.revokeTokenFamily(storedToken.userId, storedToken.roleId);
       this.logger.warn(
         JSON.stringify({
           event: 'auth.refresh.reuse_detected',
@@ -210,6 +195,35 @@ export class AuthService {
         }),
       );
       throw new UnauthorizedException('Refresh token invalido');
+    }
+
+    // Consumo ATOMICO del refresh token. Las comprobaciones anteriores son de
+    // solo lectura, asi que dos peticiones concurrentes con el mismo token las
+    // superaban ambas (veian `revokedAt: null`) y se emitian DOS familias
+    // validas sin disparar la deteccion de reuso. El `updateMany` condicional
+    // es el punto de serializacion: la base de datos garantiza que solo una de
+    // las peticiones concurrentes obtiene `count === 1`.
+    const claimed = await this.prisma.refreshToken.updateMany({
+      where: {
+        id: storedToken.id,
+        estado: Estado.ACTIVO,
+        revokedAt: null,
+        replacedByJti: null,
+      },
+      data: { revokedAt: new Date(), estado: Estado.INACTIVO },
+    });
+
+    if (claimed.count !== 1) {
+      await this.revokeTokenFamily(storedToken.userId, storedToken.roleId);
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.refresh.reuse_detected',
+          reason: 'concurrent_use',
+          userId: storedToken.userId,
+          roleId: storedToken.roleId,
+        }),
+      );
+      throw new UnauthorizedException('Refresh token reutilizado');
     }
 
     const next = await this.issueSessionTokens(
@@ -297,17 +311,21 @@ export class AuthService {
     }
 
     try {
-      const payload = (await decryptGatewayToken(
+      const claims = await verifyGatewayToken(
         token,
         this.configService,
         this.keysService,
-      )) as GatewayTokenPayload;
+        'access',
+      );
 
+      // El PDF (Figura 3) especifica que la respuesta a los hijos incluya los
+      // permisos, para que puedan autorizar sin consultar la base del Master.
       return {
         valid: true,
-        userId: payload.sub,
-        roleId: payload.roleId,
-        roleName: payload.roleName,
+        userId: claims.sub,
+        roleId: claims.roleId,
+        roleName: claims.roleName,
+        permissions: claims.permissions ?? [],
       };
     } catch {
       this.logger.warn(
@@ -330,18 +348,35 @@ export class AuthService {
 
   private async verifyRefreshToken(refreshToken: string) {
     try {
-      const payload = (await decryptGatewayToken(
+      // `'refresh'` impide presentar un access token aqui y viceversa.
+      return await verifyGatewayToken(
         refreshToken,
         this.configService,
         this.keysService,
-      )) as GatewayTokenPayload;
-      if (!payload.sub || !payload.jti) {
-        throw new Error('Refresh token incompleto');
-      }
-      return payload;
+        'refresh',
+      );
     } catch {
       throw new UnauthorizedException('Refresh token invalido o expirado');
     }
+  }
+
+  /**
+   * Permisos ACTIVOS del rol elegido.
+   *
+   * Menor privilegio (§6.2): el token lleva solo los permisos de ESE rol, no
+   * los globales del usuario ni los de otros roles que tenga asignados.
+   */
+  private async permissionsForRole(roleId: string): Promise<string[]> {
+    const rolePermissions = await this.prisma.rolePermission.findMany({
+      where: {
+        roleId,
+        estado: Estado.ACTIVO,
+        permission: { estado: Estado.ACTIVO },
+      },
+      include: { permission: { select: { code: true } } },
+    });
+
+    return rolePermissions.map((entry) => entry.permission.code).sort();
   }
 
   private async issueSessionTokens(
@@ -351,46 +386,34 @@ export class AuthService {
   ): Promise<SessionTokens> {
     const accessJti = randomUUID();
     const refreshJti = randomUUID();
-    const publicKey = await importSPKI(
-      this.keysService.getPublicKey(),
-      'RSA-OAEP-256',
+    const permissions = await this.permissionsForRole(roleId);
+
+    const accessToken = await signGatewayToken(
+      {
+        sub: userId,
+        jti: accessJti,
+        roleId,
+        roleName,
+        tokenUse: 'access',
+        permissions,
+        expiresIn: '15m',
+      },
+      this.configService,
+      this.keysService,
     );
 
-    const accessToken = await new EncryptJWT({
-      sub: userId,
-      jti: accessJti,
-      roleId,
-      roleName,
-    })
-      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
-      .setIssuedAt()
-      .setExpirationTime('15m')
-      .setIssuer(
-        this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
-      )
-      .setAudience(
-        this.configService.get<string>('JWT_AUDIENCE') ??
-          'master-gateway-clients',
-      )
-      .encrypt(publicKey);
-
-    const refreshToken = await new EncryptJWT({
-      sub: userId,
-      jti: refreshJti,
-      roleId,
-      roleName,
-    } satisfies GatewayTokenPayload)
-      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
-      .setIssuedAt()
-      .setExpirationTime('7d')
-      .setIssuer(
-        this.configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
-      )
-      .setAudience(
-        this.configService.get<string>('JWT_AUDIENCE') ??
-          'master-gateway-clients',
-      )
-      .encrypt(publicKey);
+    const refreshToken = await signGatewayToken(
+      {
+        sub: userId,
+        jti: refreshJti,
+        roleId,
+        roleName,
+        tokenUse: 'refresh',
+        expiresIn: '7d',
+      },
+      this.configService,
+      this.keysService,
+    );
 
     const expiresAt = this.addDays(new Date(), 7);
 
@@ -412,7 +435,20 @@ export class AuthService {
       tokenType: 'Bearer',
       expiresIn: '15m',
       role: { id: roleId, name: roleName },
+      permissions,
     };
+  }
+
+  /** Revoca TODA la familia de refresh tokens del par usuario/rol (OWASP). */
+  private async revokeTokenFamily(userId: string, roleId: string) {
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, roleId, estado: Estado.ACTIVO },
+      data: {
+        revokedAt: new Date(),
+        reuseDetected: true,
+        estado: Estado.INACTIVO,
+      },
+    });
   }
 
   private addDays(date: Date, days: number) {

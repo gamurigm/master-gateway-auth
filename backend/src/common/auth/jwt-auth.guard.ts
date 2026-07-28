@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { KeysService } from '../keys/keys.service';
 import { RequestWithUser } from './request-with-user';
 import { AuthenticatedUser } from './authenticated-user';
-import { decryptGatewayToken } from './jwe-token';
+import { verifyGatewayToken } from './gateway-token';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -28,12 +28,15 @@ export class JwtAuthGuard implements CanActivate {
     const token = header.slice('Bearer '.length);
 
     try {
-      const payload = await decryptGatewayToken(
+      // `'access'` es obligatorio: sin esta comprobacion el refresh token
+      // (7 dias) servia tambien como access token (15 min).
+      const claims = await verifyGatewayToken(
         token,
         this.configService,
         this.keysService,
+        'access',
       );
-      request.user = payload as unknown as AuthenticatedUser;
+      request.user = claims as unknown as AuthenticatedUser;
       return true;
     } catch {
       throw new UnauthorizedException('Token invalido o expirado');

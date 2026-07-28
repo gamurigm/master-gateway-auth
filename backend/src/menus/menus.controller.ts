@@ -12,8 +12,11 @@ import {
 import type { AuthenticatedUser } from '../common/auth/authenticated-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../common/auth/jwt-auth.guard';
+import { RequirePermissions } from '../common/auth/permissions.decorator';
+import { PermissionsGuard } from '../common/auth/permissions.guard';
 import { RequireRoles } from '../common/auth/roles.decorator';
 import { RolesGuard } from '../common/auth/roles.guard';
+import { PolicyGuard } from '../common/policy/policy.guard';
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { MenusService } from './menus.service';
@@ -32,21 +35,24 @@ export class MenusController {
 
   @Get()
   @RequireRoles('ADMIN')
-  @UseGuards(RolesGuard)
+  @RequirePermissions('menus:read')
+  @UseGuards(RolesGuard, PermissionsGuard, PolicyGuard)
   findAll() {
     return this.menusService.findAll();
   }
 
   @Post()
   @RequireRoles('ADMIN')
-  @UseGuards(RolesGuard)
+  @RequirePermissions('menus:write')
+  @UseGuards(RolesGuard, PermissionsGuard, PolicyGuard)
   create(@Body() dto: CreateMenuDto, @CurrentUser() user: AuthenticatedUser) {
     return this.menusService.create(dto, user.sub);
   }
 
   @Put(':id')
   @RequireRoles('ADMIN')
-  @UseGuards(RolesGuard)
+  @RequirePermissions('menus:write')
+  @UseGuards(RolesGuard, PermissionsGuard, PolicyGuard)
   update(
     @Param('id', UUIDv4) id: string,
     @Body() dto: UpdateMenuDto,
@@ -57,7 +63,8 @@ export class MenusController {
 
   @Delete(':id')
   @RequireRoles('ADMIN')
-  @UseGuards(RolesGuard)
+  @RequirePermissions('menus:delete')
+  @UseGuards(RolesGuard, PermissionsGuard, PolicyGuard)
   remove(
     @Param('id', UUIDv4) id: string,
     @CurrentUser() user: AuthenticatedUser,

@@ -13,6 +13,12 @@ on:
       - test
       - main
 
+# Minimo privilegio para GITHUB_TOKEN: ningun job necesita escribir en el repo.
+# Sin este bloque el token hereda los permisos por defecto de la organizacion,
+# que suelen incluir escritura.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-cd-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

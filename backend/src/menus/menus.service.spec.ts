@@ -1,7 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Estado } from '@prisma/client';
 import { MenusService } from './menus.service';
-import { PrismaService } from '../prisma/prisma.service';
 
 const ROLE_ID = '22222222-2222-2222-2222-222222222222';
 const MODULE_ID = '33333333-3333-3333-3333-333333333333';
@@ -39,7 +38,7 @@ describe('MenusService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new MenusService(prisma as unknown as PrismaService);
+    service = new MenusService(prisma);
   });
 
   it('builds a module tree from menus assigned to the active role', async () => {

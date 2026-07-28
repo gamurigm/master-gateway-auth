@@ -57,6 +57,7 @@ const ADMIN_PERMISSION_MANAGER_CODES = new Set([
 type SeedPermission = {
   id: string;
   code: string;
+  resource: string;
   action: string;
   delegable: boolean;
 };
@@ -139,12 +140,42 @@ function ensureDistinctSeedEmails(...emails: string[]) {
   }
 }
 
+/**
+ * Recursos que administra el rol ADMIN.
+ *
+ * El catalogo de permisos en si (`permissions:write` / `permissions:delete`)
+ * queda reservado a SUPER_ADMIN, igual que ya exigian los controladores con
+ * `@RequireRoles('SUPER_ADMIN')`.
+ */
+const ADMIN_MANAGED_RESOURCES = new Set(['users', 'roles', 'modules', 'menus']);
+
+/**
+ * Que permisos recibe ADMIN.
+ *
+ * La regla anterior (`delegable && action !== 'delete'`) le negaba TODOS los
+ * `*:delete`. Eso no reflejaba la realidad: los endpoints DELETE solo pedian
+ * `@RequireRoles('ADMIN')`, asi que ADMIN si podia borrar. Ahora que los
+ * permisos se aplican de verdad en el servidor (`PermissionsGuard`), esa
+ * discrepancia habria dejado a ADMIN sin poder desactivar usuarios, roles,
+ * modulos ni menus.
+ *
+ * Ademas el borrado ya NO es fisico en ninguna entidad, sino una desactivacion
+ * logica (§9), que es una operacion administrativa normal.
+ *
+ * `delegable` sigue siendo un eje distinto: gobierna si ADMIN puede DELEGAR ese
+ * permiso a otro rol, no si lo tiene (lo usan `roles.service` y la politica
+ * rego).
+ */
 function canAdminReceiveSeedPermission(permission: SeedPermission) {
   if (ADMIN_PERMISSION_MANAGER_CODES.has(permission.code)) {
     return true;
   }
 
-  return permission.delegable && permission.action !== 'delete';
+  if (permission.resource === 'permissions') {
+    return permission.action === 'read';
+  }
+
+  return ADMIN_MANAGED_RESOURCES.has(permission.resource);
 }
 
 async function main() {
@@ -442,7 +473,10 @@ async function main() {
       code: 'users:delete',
       resource: 'users',
       action: 'delete',
-      description: 'Eliminar fisicamente usuarios',
+      // El borrado es LOGICO (estado -> INACTIVO), nunca fisico: lo exige el
+      // §9 del enunciado. No delegable: ADMIN puede desactivar usuarios pero
+      // no conceder esa capacidad a otros roles.
+      description: 'Desactivar usuarios (eliminacion logica)',
       delegable: false,
     },
     {

@@ -5,7 +5,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { generateKeyPairSync } from 'node:crypto';
-import { EncryptJWT, importSPKI } from 'jose';
+import { importPKCS8, SignJWT } from 'jose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -133,8 +133,8 @@ describe('AppController (e2e)', () => {
       .expect(403);
   });
 
-  it('/api/users (GET) allows admin roles', async () => {
-    const token = await signAccessToken('ADMIN');
+  it('/api/users (GET) allows admin roles holding users:read', async () => {
+    const token = await signAccessToken('ADMIN', ['users:read']);
 
     return request(app.getHttpServer())
       .get('/api/users')
@@ -148,6 +148,18 @@ describe('AppController (e2e)', () => {
           limit: 20,
         });
       });
+  });
+
+  // Menor privilegio (§6.2): tener el rol correcto ya no basta, el token debe
+  // llevar el permiso. Antes `@RequireRoles('ADMIN')` era la unica barrera y
+  // las tablas rol_permisos no gobernaban ninguna decision del servidor.
+  it('/api/users (GET) rejects an admin whose token lacks users:read', async () => {
+    const token = await signAccessToken('ADMIN', ['roles:read']);
+
+    return request(app.getHttpServer())
+      .get('/api/users')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(403);
   });
 
   it('/api/users (GET) allows super admin roles', async () => {
@@ -171,17 +183,29 @@ describe('AppController (e2e)', () => {
     await app.close();
   });
 
-  const signAccessToken = async (roleName: string) =>
-    new EncryptJWT({
-      sub: '11111111-1111-1111-1111-111111111111',
+  /**
+   * Emite un access token FIRMADO con la clave privada de prueba.
+   *
+   * Antes se CIFRABA con la publica, que es justo el fallo corregido: cifrar no
+   * autentica al emisor. Se incluyen permisos porque los endpoints ya los
+   * exigen (`PermissionsGuard`).
+   */
+  const signAccessToken = async (
+    roleName: string,
+    permissions: string[] = [],
+  ) =>
+    new SignJWT({
       roleId: '22222222-2222-2222-2222-222222222222',
       roleName,
       jti: `${roleName.toLowerCase()}-jti`,
+      token_use: 'access',
+      permissions,
     })
-      .setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM' })
+      .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
+      .setSubject('11111111-1111-1111-1111-111111111111')
       .setIssuer('master-gateway')
       .setAudience('master-gateway-clients')
       .setIssuedAt()
       .setExpirationTime('15m')
-      .encrypt(await importSPKI(testPublicKey, 'RSA-OAEP-256'));
+      .sign(await importPKCS8(testPrivateKey, 'RS256'));
 });

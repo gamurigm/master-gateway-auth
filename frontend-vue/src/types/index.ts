@@ -23,6 +23,8 @@ export interface SessionResponse {
   tokenType: string
   expiresIn: string
   role: RoleSummary
+  /** Permisos del rol elegido (menor privilegio, §6.2). */
+  permissions: string[]
 }
 
 export interface MenuNode {
