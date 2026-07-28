@@ -2,7 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Estado } from '@prisma/client';
 import { ServiceProxyService } from './service-proxy.service';
-import { ServiceIdentityService } from './service-identity.service';
+import { ServiceIdentityService } from '../external-services/service-identity.service';
 import type { RequestWithUser } from '../common/auth/request-with-user';
 import type { PrismaService } from '../prisma/prisma.service';
 
@@ -15,12 +15,11 @@ const route = {
   estado: Estado.ACTIVO,
   service: {
     id: 'service-id',
-    code: 'INVENTARIO',
+    code: 'inventario',
     baseUrl: 'http://127.0.0.1:3001',
+    authenticationType: 'API_KEY',
+    apiKey: 'clave-de-servicio',
     estado: Estado.ACTIVO,
-    authenticationType: 'JWT',
-    apiKey: 'sk-inv-secret',
-    name: 'Inventario',
   },
   menu: {
     id: 'menu-id',
@@ -51,7 +50,6 @@ function createRequest(roleName = 'SUPER_ADMIN'): RequestWithUser {
 
 describe('ServiceProxyService', () => {
   let prisma: {
-    externalService: { findUnique: jest.Mock };
     externalServiceRoute: { findMany: jest.Mock };
     roleMenu: { count: jest.Mock };
   };
@@ -61,9 +59,6 @@ describe('ServiceProxyService', () => {
   beforeEach(() => {
     process.env['ALLOW_PRIVATE_PROBE_TARGETS'] = 'true';
     prisma = {
-      externalService: {
-        findUnique: jest.fn().mockResolvedValue({ apiKey: 'sk-inv-secret' }),
-      },
       externalServiceRoute: { findMany: jest.fn().mockResolvedValue([route]) },
       roleMenu: { count: jest.fn().mockResolvedValue(0) },
     };
@@ -77,7 +72,7 @@ describe('ServiceProxyService', () => {
     service = new ServiceProxyService(
       prisma as unknown as PrismaService,
       new ConfigService(),
-      new ServiceIdentityService(prisma as unknown as PrismaService),
+      new ServiceIdentityService(),
     );
   });
 
@@ -86,7 +81,7 @@ describe('ServiceProxyService', () => {
     delete process.env['ALLOW_PRIVATE_PROBE_TARGETS'];
   });
 
-  it('reenvia al baseUrl del servicio y agrega headers de identidad', async () => {
+  it('reenvia al baseUrl del servicio sin filtrar el token al micro', async () => {
     const result = await service.forward(createRequest());
 
     expect(result.statusCode).toBe(200);
@@ -97,10 +92,6 @@ describe('ServiceProxyService', () => {
     const headers = fetchMock.mock.calls[0][1].headers as Headers;
     expect(headers.get('authorization')).toBeNull();
     expect(headers.get('x-gateway-user-id')).toBe('user-id');
-    expect(headers.get('x-gateway-service-id')).toBe('service-id');
-    expect(headers.get('x-gateway-service-code')).toBe('INVENTARIO');
-    expect(headers.get('x-gateway-api-key')).toBe('sk-inv-secret');
-    expect(headers.get('x-request-id')).toBe('req-1');
     expect(prisma.roleMenu.count).not.toHaveBeenCalled();
   });
 
@@ -109,5 +100,63 @@ describe('ServiceProxyService', () => {
       ForbiddenException,
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // Identidad de servicio (ADR-3): el micro debe poder distinguir al Gateway
+  // legitimo de un impostor en la misma red Docker.
+  it('inyecta la identidad de servicio del microservicio destino', async () => {
+    await service.forward(createRequest());
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get('x-api-key')).toBe('clave-de-servicio');
+    expect(headers.get('x-gateway-service')).toBe('master-gateway');
+  });
+
+  it('no inyecta identidad de servicio si el micro no tiene clave', async () => {
+    prisma.externalServiceRoute.findMany.mockResolvedValue([
+      { ...route, service: { ...route.service, apiKey: null } },
+    ]);
+
+    await service.forward(createRequest());
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get('x-api-key')).toBeNull();
+    // Las cabeceras de identidad de USUARIO se siguen enviando.
+    expect(headers.get('x-gateway-user-id')).toBe('user-id');
+  });
+
+  // Sin esto, cualquier usuario autenticado podria suplantar a otro usuario o
+  // falsificar la identidad del Gateway: el micro confia en esas cabeceras
+  // precisamente porque asume que solo el Gateway las emite.
+  it('descarta las cabeceras de identidad que llegan del cliente', async () => {
+    const request = createRequest();
+    Object.assign(request.headers, {
+      'x-gateway-user-id': 'usuario-suplantado',
+      'x-gateway-role-name': 'SUPER_ADMIN',
+      'x-api-key': 'clave-falsificada',
+      'x-gateway-service': 'impostor',
+    });
+
+    await service.forward(request);
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get('x-gateway-user-id')).toBe('user-id');
+    expect(headers.get('x-api-key')).toBe('clave-de-servicio');
+    expect(headers.get('x-gateway-service')).toBe('master-gateway');
+  });
+
+  it('propaga los permisos del rol al microservicio', async () => {
+    const request = createRequest();
+    (request.user as { permissions?: string[] }).permissions = [
+      'inventario:read',
+      'inventario:write',
+    ];
+
+    await service.forward(request);
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get('x-gateway-permissions')).toBe(
+      'inventario:read,inventario:write',
+    );
   });
 });

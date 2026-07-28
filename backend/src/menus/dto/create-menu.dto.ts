@@ -1,4 +1,5 @@
 import {
+  ArrayMinSize,
   IsArray,
   IsIn,
   IsInt,
@@ -8,10 +9,9 @@ import {
   Matches,
   MaxLength,
   Min,
-  ArrayMinSize,
-  ArrayMaxSize,
 } from 'class-validator';
 import { Sanitize } from '../../common/decorators/sanitize.decorator';
+import { PROXY_HTTP_METHODS } from './proxy-route.constants';
 
 export class CreateMenuDto {
   @Sanitize()
@@ -43,19 +43,26 @@ export class CreateMenuDto {
   @IsUUID('4')
   parentId?: string;
 
+  /**
+   * URL del endpoint real en el microservicio destino.
+   *
+   * Si se indica, el Master crea la `ExternalServiceRoute` necesaria para que
+   * `/api/proxy/...` sepa a donde redirigir, sin pasar por el modulo External
+   * Services. Si se omite, el menu es solo navegacion (comportamiento actual).
+   */
   @Sanitize()
   @IsOptional()
   @IsString()
   @MaxLength(2048)
-  @Matches(/^https?:\/\/.+/, {
-    message: 'targetUrl debe empezar por http:// o https://',
+  @Matches(/^https?:\/\/.+/i, {
+    message: 'targetUrl debe ser una URL http(s) absoluta',
   })
   targetUrl?: string;
 
+  /** Metodos HTTP que la ruta expone. Por defecto `['GET']`. */
   @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(5)
-  @IsIn(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], { each: true })
+  @IsIn(PROXY_HTTP_METHODS, { each: true })
   methods?: string[];
 }

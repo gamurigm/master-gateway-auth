@@ -180,6 +180,60 @@ ul { list-style: none; padding: 0; margin: 0; }
   margin-bottom: 20px;
 }
 
+/* Bloque opcional del formulario de menus para enrutar a un microservicio. */
+.proxy-section {
+  border-top: 1px solid var(--secondary-hover);
+  margin-top: 8px;
+  padding-top: 20px;
+}
+
+.proxy-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0 0 6px;
+}
+
+.help {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.help code {
+  background: var(--secondary-bg);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+/* Los checkboxes no deben heredar el `width: 100%` de `.field input`. */
+.checkbox-item input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+
 .field label {
   font-weight: 600;
   font-size: 13px;

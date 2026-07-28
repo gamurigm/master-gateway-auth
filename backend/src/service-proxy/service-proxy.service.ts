@@ -8,12 +8,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Estado, ExternalService } from '@prisma/client';
+import { Estado } from '@prisma/client';
 import { AuthenticatedUser } from '../common/auth/authenticated-user';
 import { RequestWithUser } from '../common/auth/request-with-user';
 import { assertSafeProbeTarget } from '../external-services/ssrf-guard';
+import {
+  ServiceIdentityService,
+  type ServiceIdentityInput,
+} from '../external-services/service-identity.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ServiceIdentityService } from './service-identity.service';
 
 const DEFAULT_PROXY_TIMEOUT_MS = 10_000;
 const FULL_ACCESS_ROLE_NAMES = ['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN'];
@@ -30,6 +33,16 @@ const BLOCKED_REQUEST_HEADERS = new Set([
   'trailer',
   'transfer-encoding',
   'upgrade',
+  // Cabeceras que SOLO puede emitir el Gateway. Si el cliente las manda, se
+  // descartan: de lo contrario cualquier usuario autenticado podria suplantar
+  // a otro usuario o falsificar la identidad de servicio ante el microservicio,
+  // que confia en ellas precisamente por venir del Gateway (ADR-2 y ADR-3).
+  'x-gateway-user-id',
+  'x-gateway-role-id',
+  'x-gateway-role-name',
+  'x-gateway-permissions',
+  'x-gateway-service',
+  'x-api-key',
 ]);
 const BLOCKED_RESPONSE_HEADERS = new Set([
   'connection',
@@ -57,7 +70,7 @@ export class ServiceProxyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-    private readonly serviceIdentityService: ServiceIdentityService,
+    private readonly serviceIdentity: ServiceIdentityService,
   ) {}
 
   async forward(request: RequestWithUser): Promise<ProxyResult> {
@@ -210,7 +223,7 @@ export class ServiceProxyService {
     const roles = configured
       ? configured
           .split(',')
-          .map((role: string) => role.trim())
+          .map((role) => role.trim())
           .filter(Boolean)
       : FULL_ACCESS_ROLE_NAMES;
     return roles.includes(roleName);
@@ -237,7 +250,7 @@ export class ServiceProxyService {
   private buildHeaders(
     request: RequestWithUser,
     user: AuthenticatedUser,
-    service: ExternalService,
+    service: ServiceIdentityInput,
   ) {
     const headers = new Headers();
 
@@ -254,13 +267,23 @@ export class ServiceProxyService {
     }
 
     headers.set('x-request-id', request.requestId ?? 'unknown');
+
+    // Identidad de USUARIO (ADR-2): el micro no recibe el JWT, solo quien es el
+    // usuario. Asi no tiene que validar tokens ni se expone el token a un
+    // tercero.
     headers.set('x-gateway-user-id', user.sub);
     headers.set('x-gateway-role-id', user.roleId);
     headers.set('x-gateway-role-name', user.roleName);
+    if (user.permissions?.length) {
+      headers.set('x-gateway-permissions', user.permissions.join(','));
+    }
 
-    const identityHeaders =
-      this.serviceIdentityService.buildIdentityHeaders(service);
-    for (const [name, value] of Object.entries(identityHeaders)) {
+    // Identidad de SERVICIO (ADR-3): prueba al micro que quien llama es el
+    // Gateway. Se aplica al final para que ninguna cabecera del cliente pueda
+    // pisarla.
+    for (const [name, value] of Object.entries(
+      this.serviceIdentity.headersFor(service),
+    )) {
       headers.set(name, value);
     }
 

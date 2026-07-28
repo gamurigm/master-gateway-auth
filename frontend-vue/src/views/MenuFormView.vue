@@ -21,22 +21,6 @@
         <div class="field">
           <label>Ruta (URL)</label><input v-model="form.url">
         </div>
-        <div v-if="showProxyFields" class="proxy-section">
-          <h3>Proxy a microservicio</h3>
-          <div class="field">
-            <label>URL destino</label>
-            <input v-model="form.targetUrl" placeholder="http://inventario:3007/inventario/productos">
-            <p class="help">URL completa del endpoint en el microservicio</p>
-          </div>
-          <div class="field">
-            <label>Métodos HTTP</label>
-            <div class="checkbox-group">
-              <label v-for="m in ['GET','POST','PUT','PATCH','DELETE']" :key="m">
-                <input type="checkbox" :value="m" v-model="form.methods"> {{ m }}
-              </label>
-            </div>
-          </div>
-        </div>
         <div class="field">
           <label>Icono</label><input v-model="form.icon">
         </div>
@@ -75,6 +59,44 @@
             </option>
           </select>
         </div>
+
+        <div
+          v-if="showProxyFields"
+          class="proxy-section"
+        >
+          <h3>Proxy a microservicio</h3>
+          <p class="help">
+            Opcional. Si indicas una URL destino, el Gateway enrutara
+            <code>{{ proxyPublicPath }}</code> hacia ese microservicio.
+            Dejalo vacio si el menu es solo navegacion.
+          </p>
+          <div class="field">
+            <label>URL destino</label>
+            <input
+              v-model="form.targetUrl"
+              placeholder="http://inventario:3007/inventario/productos"
+            >
+          </div>
+          <div
+            v-if="form.targetUrl"
+            class="field"
+          >
+            <label>Metodos HTTP</label>
+            <div class="checkbox-group">
+              <label
+                v-for="m in HTTP_METHODS"
+                :key="m"
+                class="checkbox-item"
+              >
+                <input
+                  v-model="form.methods"
+                  type="checkbox"
+                  :value="m"
+                > {{ m }}
+              </label>
+            </div>
+          </div>
+        </div>
         <p
           v-if="error"
           class="error"
@@ -109,9 +131,20 @@ const saving = ref(false)
 const error = ref('')
 const allModules = ref<SystemModule[]>([])
 const allMenus = ref<Menu[]>([])
-const form = ref({ name: '', url: '', icon: '', order: 0, moduleId: '', parentId: '', targetUrl: '', methods: ['GET'] as string[] })
 
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
+
+const form = ref({
+  name: '', url: '', icon: '', order: 0, moduleId: '', parentId: '',
+  targetUrl: '', methods: ['GET'] as string[],
+})
+
+// El proxy solo tiene sentido para rutas internas de la SPA: el backend exige
+// que la URL del menu empiece por /app/ cuando se indica un destino.
 const showProxyFields = computed(() => form.value.url.startsWith('/app/'))
+const proxyPublicPath = computed(
+  () => `/api/proxy/${form.value.url.replace(/^\/app\/?/, '').replace(/^\/+/, '')}`,
+)
 
 async function saveMenu() {
   saving.value = true; error.value = ''
@@ -121,8 +154,17 @@ async function saveMenu() {
     if (form.value.icon) dto.icon = form.value.icon
     if (form.value.order) dto.order = form.value.order
     if (form.value.parentId) dto.parentId = form.value.parentId
-    if (form.value.targetUrl) dto.targetUrl = form.value.targetUrl
-    if (form.value.methods?.length) dto.methods = form.value.methods
+
+    const targetUrl = showProxyFields.value ? form.value.targetUrl.trim() : ''
+    if (targetUrl) {
+      dto.targetUrl = targetUrl
+      if (form.value.methods.length) dto.methods = form.value.methods
+    } else if (isEdit.value) {
+      // Al editar hay que enviar null explicitamente para desactivar una ruta
+      // que existiera antes; en el alta se omite el campo sin mas.
+      dto.targetUrl = null
+    }
+
     if (isEdit.value) await menuService.update(route.params.id as string, dto)
     else await menuService.create(dto as { name: string; moduleId: string })
     await menuStore.load(router, true)
@@ -137,11 +179,16 @@ onMounted(async () => {
     allModules.value = modRes.data; allMenus.value = menuRes.data
   } catch {}
   if (isEdit.value) {
-    const { data } = await menuService.findOne(route.params.id as string)
-    form.value = {
-      name: data.name, url: data.url || '', icon: data.icon || '', order: data.order,
-      moduleId: data.moduleId, parentId: data.parentId || '',
-      targetUrl: data.targetUrl || '', methods: data.methods || ['GET'],
+    try {
+      const { data } = await menuService.findOne(route.params.id as string)
+      form.value = {
+        name: data.name, url: data.url || '', icon: data.icon || '', order: data.order,
+        moduleId: data.moduleId, parentId: data.parentId || '',
+        targetUrl: data.targetUrl || '',
+        methods: data.methods?.length ? [...data.methods] : ['GET'],
+      }
+    } catch {
+      error.value = 'No se pudo cargar el menu'
     }
   }
 })

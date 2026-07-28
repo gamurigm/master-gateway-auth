@@ -101,8 +101,16 @@ model ExternalService {
   openApiPath String?                @map("openapi_path")
   /// Estrategia de autenticacion que usa el servicio (JWT, API_KEY, MTLS, OIDC, NONE).
   authenticationType String?          @default("JWT") @map("tipo_autenticacion")
-  /// API Key unica por servicio para autenticacion entre el Gateway y el micro.
-  apiKey            String?           @map("api_key")
+  /// Credencial con la que el Gateway se identifica ANTE este servicio.
+  ///
+  /// Es identidad de SERVICIO, no de usuario (ADR-3): el microservicio necesita
+  /// saber que quien llama es el Gateway legitimo y no un impostor dentro de la
+  /// misma red Docker. Es distinta de INTERNAL_API_KEY, que es la clave unica
+  /// compartida con la que los hijos llaman al Master.
+  ///
+  /// NUNCA debe salir por la API: se filtra con `omitApiKey` en todas las
+  /// lecturas, igual que `passwordHash` en Usuario.
+  apiKey      String?                @unique @map("api_key")
   /// Resultado de la ultima comprobacion de disponibilidad.
   lastProbeAt DateTime?              @map("ultima_verificacion")
   lastProbeOk Boolean?               @map("ultima_verificacion_ok")
