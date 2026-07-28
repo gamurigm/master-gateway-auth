@@ -32,6 +32,20 @@
       </dl>
 
       <div
+        v-if="originalViewUrl"
+        class="dynamic-actions"
+      >
+        <a
+          :href="originalViewUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="primary-button"
+        >
+          Abrir vista original
+        </a>
+      </div>
+
+      <div
         v-if="externalUrl"
         class="dynamic-actions"
       >
@@ -104,6 +118,20 @@ const hasPayload = ref(false)
 
 const menu = computed(() => route.meta.menu as MenuNode | undefined)
 const externalUrl = computed(() => safeExternalUrl(menu.value?.url))
+const ORIGINAL_VIEW_BASES: Record<string, string> = {
+  'reservas-hotel': 'http://localhost',
+}
+const originalViewUrl = computed(() => {
+  const internalUrl = internalAppPath(menu.value?.url)
+  if (!internalUrl) return null
+  const parts = internalUrl.replace(/^\/app\//, '').split('/').filter(Boolean)
+  const serviceSlug = parts.shift()
+  if (!serviceSlug) return null
+  const baseUrl = ORIGINAL_VIEW_BASES[serviceSlug]
+  if (!baseUrl) return null
+  const viewPath = parts.join('/')
+  return `${baseUrl}/${viewPath}`
+})
 const proxyPath = computed(() => {
   const url = internalAppPath(menu.value?.url)
   if (!url) return null

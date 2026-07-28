@@ -131,6 +131,48 @@
             </option>
           </select>
         </div>
+        <div class="proxy-section">
+          <h3>Proxy a microservicio</h3>
+          <p class="help">
+            El Gateway expondra
+            <code>{{ proxyPublicPath }}</code> y enviara la peticion a la URL
+            destino.
+          </p>
+          <p
+            v-if="!showProxyFields"
+            class="help"
+          >
+            Para habilitar el proxy, la Ruta (URL) debe empezar por
+            <code>/app/</code>.
+          </p>
+          <div class="field">
+            <label>URL destino</label>
+            <input
+              v-model="form.targetUrl"
+              :disabled="!showProxyFields"
+              placeholder="http://172.18.0.1:3001/api/stats"
+            >
+          </div>
+          <div
+            v-if="form.targetUrl"
+            class="field"
+          >
+            <label>Metodos HTTP</label>
+            <div class="checkbox-group">
+              <label
+                v-for="method in HTTP_METHODS"
+                :key="method"
+                class="checkbox-item"
+              >
+                <input
+                  v-model="form.methods"
+                  type="checkbox"
+                  :value="method"
+                > {{ method }}
+              </label>
+            </div>
+          </div>
+        </div>
         <p
           v-if="formError"
           class="error"
@@ -158,7 +200,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { menuService } from '../services/menu.service'
 import { modulesService } from '../services/modules.service'
@@ -178,10 +220,42 @@ const showModal = ref(false)
 const editingMenu = ref<Menu | null>(null)
 const saving = ref(false)
 const formError = ref('')
-const form = ref({ name: '', url: '', icon: '', order: 0, moduleId: '', parentId: '' })
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
+const form = ref({
+  name: '',
+  url: '',
+  icon: '',
+  order: 0,
+  moduleId: '',
+  parentId: '',
+  targetUrl: '',
+  methods: ['GET'] as string[],
+})
 
-function openCreate() { editingMenu.value = null; form.value = { name: '', url: '', icon: '', order: 0, moduleId: '', parentId: '' }; showModal.value = true; loadSelects() }
-function openEdit(m: Menu) { editingMenu.value = m; form.value = { name: m.name, url: m.url || '', icon: m.icon || '', order: m.order, moduleId: m.moduleId, parentId: m.parentId || '' }; showModal.value = true; loadSelects() }
+const showProxyFields = computed(() => form.value.url.startsWith('/app/'))
+const proxyPublicPath = computed(
+  () => `/api/proxy/${form.value.url.replace(/^\/app\/?/, '').replace(/^\/+/, '')}`,
+)
+
+function openCreate() {
+  editingMenu.value = null
+  form.value = {
+    name: '', url: '', icon: '', order: 0, moduleId: '', parentId: '',
+    targetUrl: '', methods: ['GET'],
+  }
+  showModal.value = true
+  void loadSelects()
+}
+function openEdit(m: Menu) {
+  editingMenu.value = m
+  form.value = {
+    name: m.name, url: m.url || '', icon: m.icon || '', order: m.order,
+    moduleId: m.moduleId, parentId: m.parentId || '',
+    targetUrl: m.targetUrl || '', methods: m.methods?.length ? [...m.methods] : ['GET'],
+  }
+  showModal.value = true
+  void loadSelects()
+}
 function closeModal() { showModal.value = false; editingMenu.value = null }
 
 async function loadSelects() {
@@ -205,6 +279,13 @@ async function saveMenu() {
     if (form.value.icon) dto.icon = form.value.icon
     if (form.value.order) dto.order = form.value.order
     if (form.value.parentId) dto.parentId = form.value.parentId
+    const targetUrl = showProxyFields.value ? form.value.targetUrl.trim() : ''
+    if (targetUrl) {
+      dto.targetUrl = targetUrl
+      if (form.value.methods.length) dto.methods = form.value.methods
+    } else if (editingMenu.value) {
+      dto.targetUrl = null
+    }
     if (editingMenu.value) {
       const { data } = await menuService.update(editingMenu.value.id, dto)
       menuStore.updateMenu(editingMenu.value.id, dto as Record<string, unknown>, router)
