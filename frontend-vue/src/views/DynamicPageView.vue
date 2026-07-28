@@ -72,10 +72,10 @@
         >
           {{ error }}
         </p>
-        <pre
-          v-else-if="payload"
-          class="json-output"
-        >{{ payload }}</pre>
+        <DynamicDataTable
+          v-else-if="hasPayload"
+          :data="payload"
+        />
         <p
           v-else
           class="muted"
@@ -92,21 +92,21 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { MenuNode } from '../types'
 import api from '../services/api'
+import { internalAppPath, safeExternalUrl } from '../utils/safe-url'
 import AppIcon from '../components/AppIcon.vue'
+import DynamicDataTable from '../components/DynamicDataTable.vue'
 
 const route = useRoute()
 const loading = ref(false)
 const error = ref('')
-const payload = ref('')
+const payload = ref<unknown>()
+const hasPayload = ref(false)
 
 const menu = computed(() => route.meta.menu as MenuNode | undefined)
-const externalUrl = computed(() => {
-  const url = menu.value?.url ?? ''
-  return /^https?:\/\//i.test(url) ? url : null
-})
+const externalUrl = computed(() => safeExternalUrl(menu.value?.url))
 const proxyPath = computed(() => {
-  const url = menu.value?.url ?? ''
-  if (!url.startsWith('/app/')) return null
+  const url = internalAppPath(menu.value?.url)
+  if (!url) return null
   return `/proxy/${url.replace(/^\/app\/?/, '')}`
 })
 
@@ -115,10 +115,12 @@ async function loadProxyData() {
 
   loading.value = true
   error.value = ''
-  payload.value = ''
+  payload.value = undefined
+  hasPayload.value = false
   try {
     const { data } = await api.get(proxyPath.value)
-    payload.value = JSON.stringify(data, null, 2)
+    payload.value = data
+    hasPayload.value = true
   } catch (e: unknown) {
     error.value =
       (e as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ||
@@ -179,15 +181,7 @@ watch(
 .result-header h3 {
   margin: 0;
 }
-.json-output {
-  margin: 0;
-  padding: 1rem;
-  border-radius: 8px;
-  background: var(--bg, #12141a);
-  border: 1px solid var(--border, #2a2e37);
-  overflow: auto;
-  max-height: 520px;
-}
+
 .muted {
   opacity: 0.7;
 }

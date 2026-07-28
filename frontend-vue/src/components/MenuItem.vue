@@ -1,8 +1,8 @@
 <template>
   <li>
     <router-link
-      v-if="node.url?.startsWith('/app/')"
-      :to="node.url"
+      v-if="internalPath"
+      :to="internalPath"
       class="menu-link"
     >
       <AppIcon
@@ -13,8 +13,8 @@
       <span>{{ node.name }}</span>
     </router-link>
     <a
-      v-else-if="node.url"
-      :href="node.url"
+      v-else-if="externalUrl"
+      :href="externalUrl"
       target="_blank"
       rel="noopener noreferrer"
       class="menu-link"
@@ -51,8 +51,15 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { MenuNode } from '../types'
+import { internalAppPath, safeExternalUrl } from '../utils/safe-url'
 import AppIcon from './AppIcon.vue'
 
-defineProps<{ node: MenuNode }>()
+const props = defineProps<{ node: MenuNode }>()
+
+// Un menu con una `url` que no sea `/app/...` ni `http(s)://` se renderiza como
+// simple agrupador, nunca como enlace: asi `javascript:` deja de ser clicable.
+const internalPath = computed(() => internalAppPath(props.node.url))
+const externalUrl = computed(() => safeExternalUrl(props.node.url))
 </script>

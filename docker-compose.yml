@@ -76,8 +76,12 @@ services:
     ports:
       - "8000:8000"   # Kong Proxy
       - "8443:8443"   # Kong Proxy HTTPS
-      - "8001:8001"   # Kong Admin API
-      - "8444:8444"   # Kong Admin API HTTPS
+      # La Admin API de Kong NO tiene autenticacion: quien la alcanza puede
+      # reconfigurar rutas y upstreams del gateway entero. Se publica solo en
+      # loopback (127.0.0.1) en vez de en todas las interfaces del host.
+      # `register-backend` la sigue usando por la red interna de compose.
+      - "127.0.0.1:8001:8001"   # Kong Admin API (solo local)
+      - "127.0.0.1:8444:8444"   # Kong Admin API HTTPS (solo local)
     healthcheck:
       test: ["CMD-SHELL", "kong health"]
       interval: 10s
@@ -110,7 +114,10 @@ services:
       opa:
         condition: service_started
     environment:
-      NODE_ENV: production
+      # `development` y no `production`: este compose es el entorno LOCAL. Con
+      # NODE_ENV=production, `validateEnv` exige secretos reales y ademas se
+      # anunciaba como produccion un stack con credenciales conocidas.
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/master_gateway?schema=public
       FRONTEND_ORIGIN: http://localhost:4200
@@ -119,12 +126,16 @@ services:
       JWT_EXPIRES_IN: 15m
       TEMP_JWT_EXPIRES_IN: 5m
       REFRESH_JWT_EXPIRES_IN: 7d
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-docker-internal-key}
+      # `${VAR:?}` aborta el arranque si la variable no esta definida. Los
+      # valores por defecto (`local-docker-internal-key`, `Admin12345!`) eran
+      # credenciales publicas en el repositorio que funcionaban tal cual.
+      # Definelas en `.env` (ver .env.example).
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?define INTERNAL_API_KEY en .env}
       OPA_URL: http://opa:8181
       SEED_SUPER_ADMIN_EMAIL: ${SEED_SUPER_ADMIN_EMAIL:-superadmin@example.com}
-      SEED_SUPER_ADMIN_PASSWORD: ${SEED_SUPER_ADMIN_PASSWORD:-SuperAdmin12345!}
+      SEED_SUPER_ADMIN_PASSWORD: ${SEED_SUPER_ADMIN_PASSWORD:?define SEED_SUPER_ADMIN_PASSWORD en .env}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@example.com}
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin12345!}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?define SEED_ADMIN_PASSWORD en .env}
       ALLOW_PRIVATE_PROBE_TARGETS: "true"
     volumes:
       - ./backend/keys:/app/keys:ro
@@ -136,6 +147,22 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+  inventario:
+    build:
+      context: ./services/inventario
+      dockerfile: Dockerfile
+    container_name: master-gateway-inventario
+    restart: unless-stopped
+    environment:
+      INVENTARIO_PORT: "3007"
+      MASTER_VALIDATE_URL: http://backend:3000/api/internals/validate-token
+      MASTER_INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-docker-internal-key}
+      MASTER_INTERNAL_SERVICE_NAME: inventario
+      INVENTARIO_ALLOWED_ROLES: SUPERADMIN,ADMIN,INVENTARIO
+      FRONTEND_ORIGIN: http://localhost:4200
+    expose:
+      - "3007"
 
   register-backend:
     image: node:24.15.0-bookworm-slim
@@ -222,12 +249,12 @@ services:
       - .:/workspace
       - codebert-cache:/cache/huggingface
     command:
+      # `frontend/src` era el Angular legado, ya retirado: el agente escaneaba
+      # una ruta inexistente y dejaba el frontend real sin analizar.
       - --path
       - backend/src
       - --path
-      - frontend/src
-      - --path
-      - services
+      - frontend-vue/src
       - --report
       - reports/codebert-sast.json
 

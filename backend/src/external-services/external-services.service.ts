@@ -6,11 +6,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Estado } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
+import { omitApiKey } from '../common/utils/omit-api-key';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExternalServiceDto } from './dto/create-external-service.dto';
 import { ProbeServiceDto } from './dto/probe-service.dto';
 import { ProvisionServiceDto } from './dto/provision-service.dto';
 import { UpdateExternalServiceDto } from './dto/update-external-service.dto';
+import { IMPLICIT_ROUTE_SERVICE_PREFIX } from '../menus/dto/proxy-route.constants';
 import { assertSafeProbeTarget } from './ssrf-guard';
 
 /** Tiempo maximo que se espera a un servicio externo antes de darlo por caido. */
@@ -66,15 +69,36 @@ export class ExternalServicesService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
-    return this.prisma.externalService.findMany({
-      where: { estado: Estado.ACTIVO },
+  async findAll() {
+    const services = await this.prisma.externalService.findMany({
+      // Los servicios con prefijo `_route_` los crea implicitamente el alta de
+      // un menu con `targetUrl`; no son servicios registrados por el usuario y
+      // no deben aparecer en este listado. Se filtra con `startsWith` de Prisma
+      // (que escapa el valor) y no con `LIKE '_route_%'`: en SQL el guion bajo
+      // es un comodin de un caracter.
+      where: {
+        estado: Estado.ACTIVO,
+        NOT: { code: { startsWith: IMPLICIT_ROUTE_SERVICE_PREFIX } },
+      },
       orderBy: { name: 'asc' },
       include: { module: true },
     });
+
+    return services.map((service) => omitApiKey(service));
   }
 
+  /**
+   * Lectura publica: sin `apiKey`.
+   *
+   * Los llamadores internos que necesiten el registro completo deben usar
+   * `findActiveOrThrow`. Separarlos evita que la credencial de servicio se
+   * escape por una respuesta HTTP por descuido.
+   */
   async findOne(id: string) {
+    return omitApiKey(await this.findActiveOrThrow(id));
+  }
+
+  private async findActiveOrThrow(id: string) {
     const service = await this.prisma.externalService.findFirst({
       where: { id, estado: Estado.ACTIVO },
       include: {
@@ -87,6 +111,33 @@ export class ExternalServicesService {
     }
 
     return service;
+  }
+
+  /**
+   * Genera y guarda una credencial de servicio nueva.
+   *
+   * Se devuelve UNA sola vez, en el momento de crearla: a partir de ahi solo se
+   * puede saber si existe (`hasApiKey`), nunca leerla. Es el patron habitual de
+   * los tokens de acceso personal.
+   */
+  async rotateApiKey(id: string, actorId: string) {
+    await this.findActiveOrThrow(id);
+    const apiKey = randomBytes(32).toString('base64url');
+
+    await this.prisma.externalService.update({
+      where: { id },
+      data: { apiKey, authenticationType: 'API_KEY', updatedBy: actorId },
+    });
+
+    this.logger.log(
+      JSON.stringify({ event: 'external_service.api_key_rotated', id }),
+    );
+
+    return {
+      apiKey,
+      message:
+        'Guarda esta clave ahora: no se volvera a mostrar. Configurala en el microservicio para que valide la cabecera x-api-key.',
+    };
   }
 
   /**
@@ -136,7 +187,7 @@ export class ExternalServicesService {
 
   /** Re-verifica un servicio ya registrado y guarda el resultado. */
   async probeExisting(id: string, actorId: string) {
-    const service = await this.findOne(id);
+    const service = await this.findActiveOrThrow(id);
 
     const result = await this.probe({
       baseUrl: service.baseUrl,
@@ -180,7 +231,7 @@ export class ExternalServicesService {
     // Si el servicio expuso metadata, usamos name desde allí si no se especificó
     const name = dto.name || result.metadata?.name || dto.code;
 
-    return this.prisma.externalService.create({
+    const created = await this.prisma.externalService.create({
       data: {
         ...dto,
         name,
@@ -190,18 +241,22 @@ export class ExternalServicesService {
         createdBy: actorId,
       },
     });
+
+    return omitApiKey(created);
   }
 
   async update(id: string, dto: UpdateExternalServiceDto, actorId: string) {
-    await this.findOne(id);
-    return this.prisma.externalService.update({
+    await this.findActiveOrThrow(id);
+    const updated = await this.prisma.externalService.update({
       where: { id },
       data: { ...dto, updatedBy: actorId },
     });
+
+    return omitApiKey(updated);
   }
 
   async remove(id: string, actorId: string) {
-    await this.findOne(id);
+    await this.findActiveOrThrow(id);
     await this.prisma.externalService.update({
       where: { id },
       data: { estado: Estado.INACTIVO, updatedBy: actorId },
@@ -220,7 +275,7 @@ export class ExternalServicesService {
    * nodo hoja por endpoint, que es el unico que lleva url.
    */
   async provision(id: string, dto: ProvisionServiceDto, actorId: string) {
-    const service = await this.findOne(id);
+    const service = await this.findActiveOrThrow(id);
 
     if (service.moduleId) {
       throw new ConflictException(
@@ -335,7 +390,10 @@ export class ExternalServicesService {
       );
 
       return {
-        service: updated,
+        // `omitApiKey` tambien aqui: `provision` devuelve el registro completo
+        // del servicio y sin esto la credencial se escaparia por esta via
+        // aunque findAll/findOne/create/update ya la filtren.
+        service: omitApiKey(updated),
         module: systemModule,
         menus: menuIds.length,
         routes: leafMenus.length,

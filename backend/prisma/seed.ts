@@ -57,6 +57,7 @@ const ADMIN_PERMISSION_MANAGER_CODES = new Set([
 type SeedPermission = {
   id: string;
   code: string;
+  resource: string;
   action: string;
   delegable: boolean;
 };
@@ -139,24 +140,116 @@ function ensureDistinctSeedEmails(...emails: string[]) {
   }
 }
 
+/**
+ * Recursos que administra el rol ADMIN.
+ *
+ * El catalogo de permisos en si (`permissions:write` / `permissions:delete`)
+ * queda reservado a SUPER_ADMIN, igual que ya exigian los controladores con
+ * `@RequireRoles('SUPER_ADMIN')`.
+ */
+const ADMIN_MANAGED_RESOURCES = new Set(['users', 'roles', 'modules', 'menus']);
+
+/**
+ * Que permisos recibe ADMIN.
+ *
+ * La regla anterior (`delegable && action !== 'delete'`) le negaba TODOS los
+ * `*:delete`. Eso no reflejaba la realidad: los endpoints DELETE solo pedian
+ * `@RequireRoles('ADMIN')`, asi que ADMIN si podia borrar. Ahora que los
+ * permisos se aplican de verdad en el servidor (`PermissionsGuard`), esa
+ * discrepancia habria dejado a ADMIN sin poder desactivar usuarios, roles,
+ * modulos ni menus.
+ *
+ * Ademas el borrado ya NO es fisico en ninguna entidad, sino una desactivacion
+ * logica (§9), que es una operacion administrativa normal.
+ *
+ * `delegable` sigue siendo un eje distinto: gobierna si ADMIN puede DELEGAR ese
+ * permiso a otro rol, no si lo tiene (lo usan `roles.service` y la politica
+ * rego).
+ */
 function canAdminReceiveSeedPermission(permission: SeedPermission) {
   if (ADMIN_PERMISSION_MANAGER_CODES.has(permission.code)) {
     return true;
   }
 
-  return permission.delegable && permission.action !== 'delete';
+  if (permission.resource === 'permissions') {
+    return permission.action === 'read';
+  }
+
+  return ADMIN_MANAGED_RESOURCES.has(permission.resource);
+}
+
+/**
+ * Contrasenas de siembra que estan escritas en este mismo fichero y en el
+ * historial de git. Sirven para desarrollo; en produccion son publicas.
+ */
+const WEAK_SEED_PASSWORDS = new Set([
+  'superadmin12345!',
+  'admin12345!',
+  'demo12345!',
+]);
+
+/**
+ * Resuelve la contrasena de una cuenta sembrada.
+ *
+ * En produccion NO se admite el valor por defecto. El caso peor era
+ * SEED_SUPER_ADMIN_PASSWORD: `configure-render-environment.sh` nunca la
+ * inyecta, asi que la cuenta mas privilegiada del sistema -la que ademas
+ * atraviesa `PermissionsGuard` sin comprobaciones- se creaba en produccion con
+ * `SuperAdmin12345!`, visible en el repositorio.
+ *
+ * `validateEnv` no lo detectaba porque solo revisa las variables PRESENTES, y
+ * esta faltaba por completo.
+ */
+function resolveSeedPassword(
+  variable: string,
+  fallback: string,
+  isProduction: boolean,
+): string {
+  const value = process.env[variable];
+
+  if (!isProduction) {
+    return value && value.length > 0 ? value : fallback;
+  }
+
+  if (!value || value.trim().length === 0) {
+    throw new Error(
+      `${variable} es obligatoria en produccion: sin ella la cuenta se crearia ` +
+        'con una contrasena por defecto que esta publicada en el repositorio.',
+    );
+  }
+
+  if (WEAK_SEED_PASSWORDS.has(value.trim().toLowerCase())) {
+    throw new Error(
+      `${variable} tiene un valor conocido y publicado. Usa un secreto real.`,
+    );
+  }
+
+  return value;
 }
 
 async function main() {
+  const isProduction = process.env.NODE_ENV === 'production';
+
   const superAdminEmail =
     process.env.SEED_SUPER_ADMIN_EMAIL ?? 'superadmin@example.com';
-  const superAdminPassword =
-    process.env.SEED_SUPER_ADMIN_PASSWORD ?? 'SuperAdmin12345!';
+  const superAdminPassword = resolveSeedPassword(
+    'SEED_SUPER_ADMIN_PASSWORD',
+    'SuperAdmin12345!',
+    isProduction,
+  );
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@example.com';
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'Admin12345!';
+  const adminPassword = resolveSeedPassword(
+    'SEED_ADMIN_PASSWORD',
+    'Admin12345!',
+    isProduction,
+  );
   const demoEmail = process.env.SEED_DEMO_EMAIL ?? 'demo@example.com';
   const salesEmail = process.env.SEED_SALES_EMAIL ?? 'ventas@example.com';
-  const demoPassword = process.env.SEED_DEMO_PASSWORD ?? 'Demo12345!';
+  const demoPassword = resolveSeedPassword(
+    'SEED_DEMO_PASSWORD',
+    'Demo12345!',
+    isProduction,
+  );
 
   ensureDistinctSeedEmails(superAdminEmail, adminEmail, demoEmail, salesEmail);
 
@@ -442,7 +535,10 @@ async function main() {
       code: 'users:delete',
       resource: 'users',
       action: 'delete',
-      description: 'Eliminar fisicamente usuarios',
+      // El borrado es LOGICO (estado -> INACTIVO), nunca fisico: lo exige el
+      // §9 del enunciado. No delegable: ADMIN puede desactivar usuarios pero
+      // no conceder esa capacidad a otros roles.
+      description: 'Desactivar usuarios (eliminacion logica)',
       delegable: false,
     },
     {

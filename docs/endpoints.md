@@ -69,6 +69,14 @@ Requieren `Authorization: Bearer <accessToken>`. `SUPER_ADMIN` pasa cualquier en
    asignaciones rol-modulo y rol-menu. El frontend recarga el arbol e inyecta las rutas con
    `router.addRoute()` sin recargar la pagina.
 
+### Presentacion dinamica de respuestas
+
+Los menus hoja con una ruta `/app/...` consultan su endpoint mediante `/proxy/...`. La vista
+dinamica detecta colecciones JSON como `items`, `data`, `results`, `records` o arreglos directos
+y genera una tabla con la union de los campos presentes en los registros. Los objetos de resumen
+como `report` se presentan como una fila y los valores anidados se pueden desplegar dentro de la
+celda. El microservicio no necesita declarar columnas en el frontend.
+
 ## Microservicio hijo `ventas`
 
 Base local: `http://localhost:3006`
