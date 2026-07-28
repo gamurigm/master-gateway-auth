@@ -38,6 +38,11 @@ El workflow y `scripts/configure-render-environment.sh` actualizan estas
 variables antes de crear el deploy. Los secretos deben existir en GitHub como
 secrets; `FRONTEND_ORIGIN` y `SEED_ADMIN_EMAIL` como variables.
 
+Los IDs se guardan como secrets `RENDER_SERVICE_ID`,
+`RENDER_FRONTEND_SERVICE_ID` y `RENDER_DATABASE_ID`. Tras aprobar todos los
+gates, el pipeline de `main` configura y despliega el mismo commit en backend y
+frontend, y verifica health, contenido Vue y CORS.
+
 Si Render devuelve un estado de despliegue fallido, el job conserva el fallo y
 añade al log de GitHub Actions el `errorMessage` del despliegue y hasta 200 logs
 recientes del servicio. El binario de Render CLI se valida con el checksum

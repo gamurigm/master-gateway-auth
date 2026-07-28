@@ -1066,6 +1066,7 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Configure Render backend service
+        id: render_backend
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
@@ -1089,7 +1090,18 @@ jobs:
           SEED_DEMO_PASSWORD: ${{ secrets.SEED_DEMO_PASSWORD }}
         run: bash scripts/configure-render-environment.sh
 
-      - name: Deploy to Render via CLI
+      - name: Configure Render frontend service
+        id: render_frontend
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_BACKEND_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_FRONTEND_SERVICE_ID: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
+          RENDER_FRONTEND_BRANCH: main
+        run: bash scripts/configure-render-frontend.sh
+
+      - name: Deploy backend exact commit
+        id: deploy_backend
+        continue-on-error: true
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
@@ -1100,45 +1112,79 @@ jobs:
             --wait \
             --commit "$GITHUB_SHA"
 
-      - name: Diagnose Render deploy failure
-        if: failure()
+      - name: Deploy frontend exact commit
+        id: deploy_frontend
+        if: always() && steps.render_frontend.outcome == 'success'
+        continue-on-error: true
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_FRONTEND_SERVICE_ID: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
         run: |
-          set +e
-          service_json="$(mktemp)"
-          deploys_json="$(mktemp)"
-          trap 'rm -f "$service_json" "$deploys_json"' EXIT
+          render deploys create "$RENDER_FRONTEND_SERVICE_ID" \
+            --output json \
+            --confirm \
+            --wait \
+            --commit "$GITHUB_SHA"
 
-          curl --fail --silent --show-error \
-            --header "Authorization: Bearer $RENDER_API_KEY" \
-            "https://api.render.com/v1/services/$RENDER_SERVICE_ID" \
-            > "$service_json"
-          workspace_id="$(jq -r '.ownerId // empty' "$service_json")"
+      - name: Diagnose backend deploy failure
+        if: steps.deploy_backend.outcome == 'failure'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_DIAGNOSTIC_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: bash scripts/diagnose-render-deploy.sh "$RENDER_DIAGNOSTIC_SERVICE_ID"
 
-          echo "::group::Render deploy details"
-          curl --fail --silent --show-error \
-            --get \
-            --header "Authorization: Bearer $RENDER_API_KEY" \
-            --data-urlencode "limit=1" \
-            "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
-            > "$deploys_json"
-          jq '.[0].deploy | {id, status, errorMessage, createdAt, finishedAt, commit}' \
-            "$deploys_json"
-          echo "::endgroup::"
+      - name: Diagnose frontend deploy failure
+        if: steps.deploy_frontend.outcome == 'failure'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_DIAGNOSTIC_SERVICE_ID: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
+        run: bash scripts/diagnose-render-deploy.sh "$RENDER_DIAGNOSTIC_SERVICE_ID"
 
-          echo "::group::Render recent service logs"
-          if [ -n "$workspace_id" ]; then
-            render workspace set "$workspace_id"
+      - name: Verify backend, frontend and CORS
+        if: |
+          steps.deploy_backend.outcome == 'success' &&
+          steps.deploy_frontend.outcome == 'success'
+        env:
+          BACKEND_URL: ${{ steps.render_backend.outputs.service_url }}
+          FRONTEND_URL: ${{ steps.render_frontend.outputs.frontend_url }}
+        run: |
+          test -n "$BACKEND_URL"
+          test -n "$FRONTEND_URL"
+
+          curl --fail --show-error --silent \
+            --retry 12 \
+            --retry-all-errors \
+            --retry-delay 5 \
+            "$BACKEND_URL/api/health"
+
+          page="$(curl --fail --show-error --silent \
+            --retry 12 \
+            --retry-all-errors \
+            --retry-delay 5 \
+            "$FRONTEND_URL/")"
+          grep -q 'id="app"' <<< "$page"
+
+          cors_headers="$(curl --fail --show-error --silent --include \
+            --request OPTIONS \
+            --header "Origin: $FRONTEND_URL" \
+            --header "Access-Control-Request-Method: POST" \
+            "$BACKEND_URL/api/auth/login")"
+          grep -qi "access-control-allow-origin: $FRONTEND_URL" <<< "$cors_headers"
+
+      - name: Enforce Render deploy results
+        if: always()
+        env:
+          BACKEND_DEPLOY_OUTCOME: ${{ steps.deploy_backend.outcome }}
+          FRONTEND_DEPLOY_OUTCOME: ${{ steps.deploy_frontend.outcome }}
+        run: |
+          if [ "$BACKEND_DEPLOY_OUTCOME" != "success" ]; then
+            echo "::error::El deploy del backend termino en $BACKEND_DEPLOY_OUTCOME."
+            exit 1
           fi
-          render logs \
-            --resources "$RENDER_SERVICE_ID" \
-            --start "$(date -u -d '20 minutes ago' +'%Y-%m-%dT%H:%M:%SZ')" \
-            --direction backward \
-            --limit 200 \
-            --output json
-          echo "::endgroup::"
+          if [ "$FRONTEND_DEPLOY_OUTCOME" != "success" ]; then
+            echo "::error::El deploy del frontend termino en $FRONTEND_DEPLOY_OUTCOME."
+            exit 1
+          fi
 
       - name: Notify deploy result
         if: always()

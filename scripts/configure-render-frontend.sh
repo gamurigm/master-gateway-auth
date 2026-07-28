@@ -8,7 +8,8 @@ set -euo pipefail
 api_url="https://api.render.com/v1"
 auth_header="Authorization: Bearer $RENDER_API_KEY"
 frontend_name="master-gateway-frontend"
-frontend_branch="deploy/frontend-test"
+frontend_branch="${RENDER_FRONTEND_BRANCH:-main}"
+frontend_id="${RENDER_FRONTEND_SERVICE_ID:-}"
 # El frontend es Vue + Vite (`frontend-vue`), no el Angular legado. La ruta de
 # publicacion anterior (`frontend/dist/frontend/browser`) era la salida de
 # Angular y ya no existe. Vite lee `VITE_API_URL` del entorno en tiempo de
@@ -27,18 +28,36 @@ owner_id=$(jq -r '.ownerId' "$backend_response")
 repo=$(jq -r '.repo' "$backend_response")
 backend_url=$(jq -r '.serviceDetails.url' "$backend_response")
 
-services_response="$temp_dir/services.json"
-curl --fail --silent --show-error --get \
-  --header "$auth_header" \
-  --data-urlencode "ownerId=$owner_id" \
-  --data-urlencode "name=$frontend_name" \
-  --data-urlencode "limit=100" \
-  "$api_url/services" > "$services_response"
+if [[ -n "$frontend_id" ]]; then
+  frontend_response="$temp_dir/frontend.json"
+  curl --fail --silent --show-error \
+    --header "$auth_header" \
+    "$api_url/services/$frontend_id" > "$frontend_response"
 
-frontend_id=$(jq -r \
-  --arg name "$frontend_name" \
-  'map(.service | select(.name == $name and .type == "static_site")) | .[0].id // empty' \
-  "$services_response")
+  frontend_type=$(jq -r '.type // empty' "$frontend_response")
+  frontend_owner_id=$(jq -r '.ownerId // empty' "$frontend_response")
+  if [[ "$frontend_type" != "static_site" ]]; then
+    echo "RENDER_FRONTEND_SERVICE_ID no corresponde a un static_site" >&2
+    exit 1
+  fi
+  if [[ "$frontend_owner_id" != "$owner_id" ]]; then
+    echo "Backend y frontend pertenecen a workspaces distintos" >&2
+    exit 1
+  fi
+else
+  services_response="$temp_dir/services.json"
+  curl --fail --silent --show-error --get \
+    --header "$auth_header" \
+    --data-urlencode "ownerId=$owner_id" \
+    --data-urlencode "name=$frontend_name" \
+    --data-urlencode "limit=100" \
+    "$api_url/services" > "$services_response"
+
+  frontend_id=$(jq -r \
+    --arg name "$frontend_name" \
+    'map(.service | select(.name == $name and .type == "static_site")) | .[0].id // empty' \
+    "$services_response")
+fi
 
 if [[ -z "$frontend_id" ]]; then
   create_payload="$temp_dir/create-frontend.json"
