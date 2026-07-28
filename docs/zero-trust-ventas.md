@@ -33,7 +33,7 @@ Variables relevantes:
 | `MASTER_INTERNAL_API_KEY` | `change-me-internal-key` |
 | `MASTER_INTERNAL_SERVICE_NAME` | `ventas` |
 | `INTERNAL_API_KEY` | Fallback compatible si no se define `MASTER_INTERNAL_API_KEY` |
-| `VENTAS_ALLOWED_ROLES` | `ADMIN,VENTAS` |
+| `VENTAS_ALLOWED_ROLES` | `SUPER_ADMIN,ADMIN,VENTAS` |
 | `MASTER_VALIDATE_RETRY_ATTEMPTS` | `3` |
 | `MASTER_VALIDATE_RETRY_DELAY_MS` | `500` |
 

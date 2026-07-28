@@ -4,13 +4,13 @@ import rego.v1
 
 default allow := false
 
-superadmin if input.subject.role_name == "SUPERADMIN"
+superadmin if input.subject.role_name in {"SUPER_ADMIN", "SUPERADMIN"}
 
 has_permission(permission) if permission in input.subject.permissions
 
 hard_delete_action if endswith(input.action, ":delete_hard")
 
-target_is_superadmin if input.target.role_name == "SUPERADMIN"
+target_is_superadmin if input.target.role_name in {"SUPER_ADMIN", "SUPERADMIN"}
 
 target_permission_is_hard_delete if endswith(input.target.permission_code, ":delete_hard")
 

@@ -16,6 +16,7 @@ import { RequireRoles } from '../common/auth/roles.decorator';
 import { RolesGuard } from '../common/auth/roles.guard';
 import { AssignMenuDto } from './dto/assign-menu.dto';
 import { AssignModuleDto } from './dto/assign-module.dto';
+import { AssignPermissionDto } from './dto/assign-permission.dto';
 import { AssignUserDto } from './dto/assign-user.dto';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -41,7 +42,7 @@ export class RolesController {
 
   @Post()
   create(@Body() dto: CreateRoleDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.rolesService.create(dto, user.sub);
+    return this.rolesService.create(dto, user.sub, user.roleName);
   }
 
   @Put(':id')
@@ -50,7 +51,7 @@ export class RolesController {
     @Body() dto: UpdateRoleDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.rolesService.update(id, dto, user.sub);
+    return this.rolesService.update(id, dto, user.sub, user.roleName);
   }
 
   @Delete(':id')
@@ -58,7 +59,7 @@ export class RolesController {
     @Param('id', UUIDv4) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.rolesService.remove(id, user.sub);
+    return this.rolesService.remove(id, user.sub, user.roleName);
   }
 
   @Post(':id/users')
@@ -67,7 +68,12 @@ export class RolesController {
     @Body() dto: AssignUserDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.rolesService.assignUser(id, dto.userId, user.sub);
+    return this.rolesService.assignUser(
+      id,
+      dto.userId,
+      user.sub,
+      user.roleName,
+    );
   }
 
   @Delete(':id/users/:userId')
@@ -76,7 +82,7 @@ export class RolesController {
     @Param('userId', UUIDv4) userId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.rolesService.unassignUser(id, userId, user.sub);
+    return this.rolesService.unassignUser(id, userId, user.sub, user.roleName);
   }
 
   @Post(':id/modules')
@@ -85,7 +91,12 @@ export class RolesController {
     @Body() dto: AssignModuleDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.rolesService.assignModule(id, dto.moduleId, user.sub);
+    return this.rolesService.assignModule(
+      id,
+      dto.moduleId,
+      user.sub,
+      user.roleName,
+    );
   }
 
   @Post(':id/menus')
@@ -94,7 +105,12 @@ export class RolesController {
     @Body() dto: AssignMenuDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.rolesService.assignMenu(id, dto.menuId, user.sub);
+    return this.rolesService.assignMenu(
+      id,
+      dto.menuId,
+      user.sub,
+      user.roleName,
+    );
   }
 
   @Delete(':id/modules/:moduleId')
@@ -103,7 +119,12 @@ export class RolesController {
     @Param('moduleId', UUIDv4) moduleId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.rolesService.unassignModule(id, moduleId, user.sub);
+    return this.rolesService.unassignModule(
+      id,
+      moduleId,
+      user.sub,
+      user.roleName,
+    );
   }
 
   @Delete(':id/menus/:menuId')
@@ -112,6 +133,36 @@ export class RolesController {
     @Param('menuId', UUIDv4) menuId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.rolesService.unassignMenu(id, menuId, user.sub);
+    return this.rolesService.unassignMenu(id, menuId, user.sub, user.roleName);
+  }
+
+  @Post(':id/permissions')
+  assignPermission(
+    @Param('id', UUIDv4) id: string,
+    @Body() dto: AssignPermissionDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.rolesService.assignPermission(
+      id,
+      dto.permissionId,
+      user.sub,
+      user.roleId,
+      user.roleName,
+    );
+  }
+
+  @Delete(':id/permissions/:permissionId')
+  unassignPermission(
+    @Param('id', UUIDv4) id: string,
+    @Param('permissionId', UUIDv4) permissionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.rolesService.unassignPermission(
+      id,
+      permissionId,
+      user.sub,
+      user.roleId,
+      user.roleName,
+    );
   }
 }

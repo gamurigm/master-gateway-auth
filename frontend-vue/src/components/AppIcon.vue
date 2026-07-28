@@ -1,5 +1,8 @@
 <template>
-  <component :is="iconComponent" v-bind="$attrs" />
+  <component
+    :is="iconComponent"
+    v-bind="$attrs"
+  />
 </template>
 
 <script setup lang="ts">

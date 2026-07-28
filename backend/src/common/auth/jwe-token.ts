@@ -7,7 +7,10 @@ export async function decryptGatewayToken(
   configService: ConfigService,
   keysService: KeysService,
 ): Promise<JWTPayload> {
-  const privateKey = await importPKCS8(keysService.getPrivateKey(), 'RSA-OAEP-256');
+  const privateKey = await importPKCS8(
+    keysService.getPrivateKey(),
+    'RSA-OAEP-256',
+  );
   const { payload } = await jwtDecrypt(token, privateKey, {
     issuer: configService.get<string>('JWT_ISSUER') ?? 'master-gateway',
     audience:

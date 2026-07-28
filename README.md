@@ -5,7 +5,7 @@ Microservicio maestro full-stack que centraliza autenticacion, autorizacion basa
 ## Stack
 
 | Capa          | Tecnologia                                                                  |
-| ---------------| -----------------------------------------------------------------------------|
+| ------------- | --------------------------------------------------------------------------- |
 | Backend       | NestJS + TypeScript                                                         |
 | ORM           | Prisma                                                                      |
 | BD            | PostgreSQL 16                                                               |
@@ -50,14 +50,14 @@ wsl -e docker compose up -d postgres
 
 ### Puertos
 
-| Servicio | Desarrollo (`npm run dev`) | Docker Compose (host) |
-| --- | --- | --- |
-| Backend (Master) | `3000` | `3000` (`BACKEND_PORT`) |
-| Frontend Vue (SPA) | `4200` (Vite) | `4201` (`FRONTEND_VUE_PORT`) |
-| Frontend Angular (legado) | — | `4200` (`FRONTEND_PORT`) |
-| Microservicio ventas | `3006` | `3006` (`VENTAS_PORT`) |
-| PostgreSQL | — | `5443` → `5432` |
-| SonarQube | — | `9000` |
+| Servicio                  | Desarrollo (`npm run dev`) | Docker Compose (host)        |
+| ------------------------- | -------------------------- | ---------------------------- |
+| Backend (Master)          | `3000`                     | `3000` (`BACKEND_PORT`)      |
+| Frontend Vue (SPA)        | `4200` (Vite)              | `4201` (`FRONTEND_VUE_PORT`) |
+| Frontend Angular (legado) | —                          | `4200` (`FRONTEND_PORT`)     |
+| Microservicio ventas      | `3006`                     | `3006` (`VENTAS_PORT`)       |
+| PostgreSQL                | —                          | `5443` → `5432`              |
+| SonarQube                 | —                          | `9000`                       |
 
 En desarrollo, Vite sirve el SPA en `4200` y proxya `/api` hacia el backend en
 `http://localhost:3000` (ver `frontend-vue/vite.config.ts`). En Docker Compose el
@@ -95,7 +95,7 @@ docs/              # Documentacion, diagramas y coleccion HTTP
 - Login con `tempToken` y seleccion obligatoria de rol antes del dashboard.
 - JWT final con un solo rol activo (`accessToken` + `refreshToken`).
 - Rotacion y deteccion de reuso en refresh tokens.
-- CRUD de usuarios, roles, modulos y menus con soft delete.
+- CRUD de usuarios, roles, modulos y menus. ADMIN inactiva usuarios; SUPER_ADMIN puede borrar usuarios fisicamente.
 - Arbol de navegacion recursivo (`GET /api/menus/tree`) segun rol.
 - Endpoint interno `POST /api/internals/validate-token` para Zero Trust.
 - Microservicio hijo `ventas` que valida tokens contra el Master.
@@ -107,7 +107,7 @@ docs/              # Documentacion, diagramas y coleccion HTTP
 ### Autenticacion
 
 | Metodo | Ruta                            | Descripcion                   |
-| --------| ---------------------------------| -------------------------------|
+| ------ | ------------------------------- | ----------------------------- |
 | `POST` | `/api/auth/login`               | Inicio de sesion              |
 | `POST` | `/api/auth/select-role`         | Seleccion de rol de trabajo   |
 | `POST` | `/api/auth/refresh-token`       | Rotar refresh token           |
@@ -117,7 +117,7 @@ docs/              # Documentacion, diagramas y coleccion HTTP
 ### Gestion
 
 | Metodo | Ruta              | Descripcion            |
-| --------| -------------------| ------------------------|
+| ------ | ----------------- | ---------------------- |
 | `GET`  | `/api/users`      | Listar usuarios        |
 | `POST` | `/api/users`      | Crear usuario          |
 | `GET`  | `/api/roles`      | Listar roles           |
@@ -129,10 +129,10 @@ docs/              # Documentacion, diagramas y coleccion HTTP
 
 ### Microservicio ventas
 
-| Metodo | Ruta | Descripcion |
-| --- | --- | --- |
-| `GET` | `http://localhost:3006/health` | Health del hijo |
-| `GET` | `http://localhost:3006/ventas/ordenes` | Ordenes protegidas por token |
+| Metodo | Ruta                                   | Descripcion                  |
+| ------ | -------------------------------------- | ---------------------------- |
+| `GET`  | `http://localhost:3006/health`         | Health del hijo              |
+| `GET`  | `http://localhost:3006/ventas/ordenes` | Ordenes protegidas por token |
 
 ## Seed
 
@@ -140,17 +140,18 @@ docs/              # Documentacion, diagramas y coleccion HTTP
 npm run prisma:seed
 ```
 
-Crea 3 usuarios, sus roles, los módulos Administración y Ventas, y los menús
-iniciales. Todos los IDs son UUID v4 reales.
+Crea 4 usuarios bootstrap, sus roles, los módulos Administración y Ventas, y los menús
+iniciales. El seed registra `_seed_runs/core-security-v2`; en arranques posteriores no vuelve a crear ni sobrescribir datos salvo que uses `SEED_RESET=true`.
 
-| Email                | Password      | Rol             |
-| ----------------------| ---------------| -----------------|
-| `admin@example.com`  | `Admin12345!` | ADMIN (ve todo) |
-| `demo@example.com`   | `Demo12345!`  | USER            |
-| `ventas@example.com` | `Demo12345!`  | VENTAS          |
+| Email                    | Password           | Rol         |
+| ------------------------ | ------------------ | ----------- |
+| `superadmin@example.com` | `SuperAdmin12345!` | SUPER_ADMIN |
+| `admin@example.com`      | `Admin12345!`      | ADMIN       |
+| `demo@example.com`       | `Demo12345!`       | USER        |
+| `ventas@example.com`     | `Demo12345!`       | VENTAS      |
 
-> La contraseña del admin sale de `SEED_ADMIN_PASSWORD` (default `Admin12345!`);
-> las de demo/ventas de `SEED_DEMO_PASSWORD` (default `Demo12345!`).
+> La contraseña del superadmin sale de `SEED_SUPER_ADMIN_PASSWORD` (default `SuperAdmin12345!`);
+> la del admin de `SEED_ADMIN_PASSWORD` y las de demo/ventas de `SEED_DEMO_PASSWORD`.
 
 ## Probar en local (paso a paso)
 
@@ -180,13 +181,13 @@ el Workspace Selector).
 
 ### Problemas comunes
 
-| Síntoma | Causa | Solución |
-| --- | --- | --- |
-| `ng serve ... requires Node v22.22.3` | Estás en `frontend/` (Angular legado) | Usa `frontend-vue/`: `npm run dev:frontend` |
-| Página no carga en `localhost:4201` | 4201 es el puerto de **compose**, no de dev | En dev el SPA está en **4200** |
-| `Error al iniciar sesion` + `ECONNREFUSED ::1:3000` en Vite | El backend no está corriendo | Levanta `npm run dev:backend` en otra terminal |
-| Sigue `ECONNREFUSED ::1:3000` con el backend arriba | Windows resuelve `localhost` a IPv6; el backend escucha en IPv4 | Ya resuelto: el proxy de Vite apunta a `127.0.0.1` (reinicia Vite) |
-| Login responde 401 con credenciales correctas | Falta el seed | `npm run prisma:seed` |
+| Síntoma                                                     | Causa                                                           | Solución                                                           |
+| ----------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `ng serve ... requires Node v22.22.3`                       | Estás en `frontend/` (Angular legado)                           | Usa `frontend-vue/`: `npm run dev:frontend`                        |
+| Página no carga en `localhost:4201`                         | 4201 es el puerto de **compose**, no de dev                     | En dev el SPA está en **4200**                                     |
+| `Error al iniciar sesion` + `ECONNREFUSED ::1:3000` en Vite | El backend no está corriendo                                    | Levanta `npm run dev:backend` en otra terminal                     |
+| Sigue `ECONNREFUSED ::1:3000` con el backend arriba         | Windows resuelve `localhost` a IPv6; el backend escucha en IPv4 | Ya resuelto: el proxy de Vite apunta a `127.0.0.1` (reinicia Vite) |
+| Login responde 401 con credenciales correctas               | Falta el seed                                                   | `npm run prisma:seed`                                              |
 
 Verifica que el backend responde: abre `http://localhost:3000/api/health` →
 debe devolver `{"status":"ok",...}`.
@@ -224,6 +225,7 @@ npm run sast:rules       # escanea el repo sólo con reglas, sin descargar pesos
 ```
 
 Ver detalles en `docs/codebert-sast.md`.
+
 ## SonarQube local
 
 El mismo `sonarqube:community` se levanta de forma temporal dentro del job de
@@ -273,6 +275,6 @@ UNLICENSED - Proyecto academico ESPE.
 
 ## Integrantes
 
--   **Camilo Orrico** 
--   **Cesar Loor**
--   **Gabriel Murrillo** :)
+- **Camilo Orrico**
+- **Cesar Loor**
+- **Gabriel Murrillo** :)

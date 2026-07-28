@@ -24,6 +24,31 @@ export interface DiscoveredEndpoint {
   method: string;
 }
 
+export interface ServiceMetadata {
+  name: string;
+  version: string;
+  description?: string;
+  vendor?: string;
+  /** Endpoints expuestos que pueden convertirse en menús. */
+  endpoints?: Array<{
+    name: string;
+    path: string;
+    method: string;
+    description?: string;
+  }>;
+  /** Permisos que el servicio registra automáticamente. */
+  permissions?: Array<{
+    code: string;
+    resource: string;
+    action: string;
+    description?: string;
+  }>;
+  /** Capacidades adicionales del servicio. */
+  capabilities?: string[];
+  openApiUrl?: string;
+  healthEndpoint?: string;
+}
+
 export interface ProbeResult {
   reachable: boolean;
   statusCode: number | null;
@@ -31,6 +56,8 @@ export interface ProbeResult {
   resolvedAddress: string;
   error: string | null;
   discoveredEndpoints: DiscoveredEndpoint[];
+  /** Metadata obtenida de /internal/metadata si el servicio la expone. */
+  metadata?: ServiceMetadata | null;
 }
 
 @Injectable()
@@ -50,7 +77,9 @@ export class ExternalServicesService {
   async findOne(id: string) {
     const service = await this.prisma.externalService.findFirst({
       where: { id, estado: Estado.ACTIVO },
-      include: { module: { include: { menus: { where: { estado: Estado.ACTIVO } } } } },
+      include: {
+        module: { include: { menus: { where: { estado: Estado.ACTIVO } } } },
+      },
     });
 
     if (!service) {
@@ -79,9 +108,10 @@ export class ExternalServicesService {
       const latencyMs = Date.now() - startedAt;
       const reachable = response.ok;
 
-      const discoveredEndpoints = reachable
-        ? await this.discoverEndpoints(dto.baseUrl, dto.openApiPath)
-        : [];
+      const [discoveredEndpoints, metadata] = await Promise.all([
+        this.discoverEndpoints(dto.baseUrl, dto.openApiPath),
+        this.discoverMetadata(dto.baseUrl),
+      ]);
 
       return {
         reachable,
@@ -90,6 +120,7 @@ export class ExternalServicesService {
         resolvedAddress: address,
         error: reachable ? null : `El servicio respondio ${response.status}`,
         discoveredEndpoints,
+        metadata,
       };
     } catch (error) {
       return {
@@ -134,8 +165,6 @@ export class ExternalServicesService {
       throw new ConflictException('El codigo de servicio ya existe');
     }
 
-    // El alta exige que el servicio responda: registrar un servicio inalcanzable
-    // generaria menus rotos para todos los usuarios del rol.
     const result = await this.probe({
       baseUrl: dto.baseUrl,
       ...(dto.healthPath ? { healthPath: dto.healthPath } : {}),
@@ -148,13 +177,17 @@ export class ExternalServicesService {
       );
     }
 
+    // Si el servicio expuso metadata, usamos name desde allí si no se especificó
+    const name = dto.name || result.metadata?.name || dto.code;
+
     return this.prisma.externalService.create({
       data: {
         ...dto,
-        createdBy: actorId,
+        name,
         lastProbeAt: new Date(),
         lastProbeOk: true,
         lastProbeMs: result.latencyMs,
+        createdBy: actorId,
       },
     });
   }
@@ -201,14 +234,18 @@ export class ExternalServicesService {
     });
 
     if (roles.length !== dto.roleIds.length) {
-      throw new BadRequestException('Alguno de los roles indicados no existe o esta inactivo');
+      throw new BadRequestException(
+        'Alguno de los roles indicados no existe o esta inactivo',
+      );
     }
 
     const existingModule = await this.prisma.systemModule.findUnique({
       where: { code: service.code },
     });
     if (existingModule) {
-      throw new ConflictException(`Ya existe un modulo con el codigo ${service.code}`);
+      throw new ConflictException(
+        `Ya existe un modulo con el codigo ${service.code}`,
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -216,7 +253,8 @@ export class ExternalServicesService {
         data: {
           code: service.code,
           name: service.name,
-          description: service.description ?? `Modulo generado desde ${service.baseUrl}`,
+          description:
+            service.description ?? `Modulo generado desde ${service.baseUrl}`,
           createdBy: actorId,
         },
       });
@@ -236,26 +274,42 @@ export class ExternalServicesService {
 
       const leafMenus = [];
       for (const [index, item] of dto.items.entries()) {
-        leafMenus.push(
-          await tx.menu.create({
-            data: {
-              name: item.name,
-              url: item.path,
-              icon: item.icon ?? 'link',
-              order: index + 1,
-              moduleId: systemModule.id,
-              parentId: rootMenu.id,
-              createdBy: actorId,
-            },
-          }),
-        );
+        const leafMenu = await tx.menu.create({
+          data: {
+            name: item.name,
+            url: item.path,
+            icon: item.icon ?? 'link',
+            order: index + 1,
+            moduleId: systemModule.id,
+            parentId: rootMenu.id,
+            createdBy: actorId,
+          },
+        });
+
+        await tx.externalServiceRoute.create({
+          data: {
+            serviceId: service.id,
+            menuId: leafMenu.id,
+            publicPath: this.toProxyPublicPath(item.path),
+            targetPath:
+              item.targetPath ?? this.inferTargetPath(item.path, service.code),
+            methods: this.normalizeMethods(item.methods),
+            createdBy: actorId,
+          },
+        });
+
+        leafMenus.push(leafMenu);
       }
 
       const menuIds = [rootMenu.id, ...leafMenus.map((menu) => menu.id)];
 
       for (const role of roles) {
         await tx.roleModule.create({
-          data: { roleId: role.id, moduleId: systemModule.id, createdBy: actorId },
+          data: {
+            roleId: role.id,
+            moduleId: systemModule.id,
+            createdBy: actorId,
+          },
         });
         for (const menuId of menuIds) {
           await tx.roleMenu.create({
@@ -275,14 +329,44 @@ export class ExternalServicesService {
           serviceId: id,
           moduleId: systemModule.id,
           menus: menuIds.length,
+          routes: leafMenus.length,
           roles: roles.length,
         }),
       );
 
-      return { service: updated, module: systemModule, menus: menuIds.length };
+      return {
+        service: updated,
+        module: systemModule,
+        menus: menuIds.length,
+        routes: leafMenus.length,
+      };
     });
   }
 
+  private toProxyPublicPath(menuPath: string) {
+    return `/${menuPath.replace(/^\/app\/?/, '').replace(/^\/+/, '')}`;
+  }
+
+  private inferTargetPath(menuPath: string, serviceCode: string) {
+    const proxyPath = this.toProxyPublicPath(menuPath);
+    const serviceSlug = serviceCode.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const withoutService = proxyPath.replace(
+      new RegExp(`^/${serviceSlug}(?=/|$)`),
+      '',
+    );
+    return withoutService || proxyPath;
+  }
+
+  private normalizeMethods(methods: string[] | undefined) {
+    const normalized = [
+      ...new Set(
+        (methods?.length ? methods : ['GET']).map((method) =>
+          method.toUpperCase(),
+        ),
+      ),
+    ];
+    return normalized;
+  }
   /**
    * Descubre endpoints leyendo el documento OpenAPI del servicio, si lo expone.
    * Es informativo: el administrador decide en la UI cuales convertir en menu.
@@ -306,7 +390,10 @@ export class ExternalServicesService {
 
       const raw = await this.readCapped(response);
       const document = JSON.parse(raw) as {
-        paths?: Record<string, Record<string, { summary?: string; operationId?: string }>>;
+        paths?: Record<
+          string,
+          Record<string, { summary?: string; operationId?: string }>
+        >;
       };
 
       const endpoints: DiscoveredEndpoint[] = [];
@@ -332,6 +419,43 @@ export class ExternalServicesService {
         }),
       );
       return [];
+    }
+  }
+
+  /**
+   * Descubre metadata del servicio via contrato /internal/metadata.
+   * Si el servicio implementa el contrato, devuelve información estructurada
+   * (módulos, menús, permisos, capacidades). Es el reemplazo moderno de
+   * discoverEndpoints basado en OpenAPI.
+   */
+  private async discoverMetadata(
+    baseUrl: string,
+  ): Promise<ServiceMetadata | null> {
+    const target = `${baseUrl.replace(/\/+$/, '')}/internal/metadata`;
+
+    try {
+      await assertSafeProbeTarget(target);
+      const response = await this.fetchWithTimeout(target);
+      if (!response.ok) {
+        return null;
+      }
+
+      const raw = await this.readCapped(response);
+      const metadata = JSON.parse(raw) as ServiceMetadata;
+
+      if (!metadata.name || !metadata.version) {
+        this.logger.warn(
+          `Metadata incompleta en ${target}: faltan name o version`,
+        );
+        return null;
+      }
+
+      return metadata;
+    } catch (error) {
+      this.logger.debug(
+        `Servicio no expone /internal/metadata (${this.describeError(error)})`,
+      );
+      return null;
     }
   }
 

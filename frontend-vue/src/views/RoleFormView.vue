@@ -3,14 +3,37 @@
     <div class="admin-header">
       <span class="eyebrow">Permisos</span>
       <h1>{{ isEdit ? 'Editar rol' : 'Nuevo rol' }}</h1>
-      <router-link to="/app/roles" class="secondary-button">Volver</router-link>
+      <router-link
+        to="/app/roles"
+        class="secondary-button"
+      >
+        Volver
+      </router-link>
     </div>
     <div class="admin-card">
       <form @submit.prevent="saveRole">
-        <div class="field"><label>Nombre</label><input v-model="form.name" required /></div>
-        <div class="field"><label>Descripcion</label><input v-model="form.description" /></div>
-        <p v-if="error" class="error">{{ error }}</p>
-        <button type="submit" class="primary-button" :disabled="saving">{{ saving ? 'Guardando...' : 'Guardar' }}</button>
+        <div class="field">
+          <label>Nombre</label><input
+            v-model="form.name"
+            required
+          >
+        </div>
+        <div class="field">
+          <label>Descripcion</label><input v-model="form.description">
+        </div>
+        <p
+          v-if="error"
+          class="error"
+        >
+          {{ error }}
+        </p>
+        <button
+          type="submit"
+          class="primary-button"
+          :disabled="saving"
+        >
+          {{ saving ? 'Guardando...' : 'Guardar' }}
+        </button>
       </form>
     </div>
   </div>

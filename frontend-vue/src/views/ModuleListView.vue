@@ -3,36 +3,121 @@
     <div class="admin-header">
       <span class="eyebrow">Arquitectura</span>
       <h1>Modulos</h1>
-      <button class="primary-button" @click="openCreate">+ Nuevo modulo</button>
+      <button
+        class="primary-button"
+        @click="openCreate"
+      >
+        + Nuevo modulo
+      </button>
     </div>
-    <template v-if="loading"><div class="list-state"><div class="state-spinner" /> Cargando...</div></template>
-    <template v-else-if="error"><div class="error-state"><p>{{ error }}</p><button class="secondary-button" @click="loadModules">Reintentar</button></div></template>
-    <template v-else-if="modules.length === 0"><div class="empty-state"><p>No hay modulos registrados</p><button class="primary-button" @click="openCreate">+ Crear primer modulo</button></div></template>
-    <table v-else class="crud-table">
+    <template v-if="loading">
+      <div class="list-state">
+        <div class="state-spinner" /> Cargando...
+      </div>
+    </template>
+    <template v-else-if="error">
+      <div class="error-state">
+        <p>{{ error }}</p><button
+          class="secondary-button"
+          @click="loadModules"
+        >
+          Reintentar
+        </button>
+      </div>
+    </template>
+    <template v-else-if="modules.length === 0">
+      <div class="empty-state">
+        <p>No hay modulos registrados</p><button
+          class="primary-button"
+          @click="openCreate"
+        >
+          + Crear primer modulo
+        </button>
+      </div>
+    </template>
+    <table
+      v-else
+      class="crud-table"
+    >
       <thead><tr><th>Codigo</th><th>Nombre</th><th>Descripcion</th><th>Estado</th><th>Acciones</th></tr></thead>
       <tbody>
-        <tr v-for="m in modules" :key="m.id">
+        <tr
+          v-for="m in modules"
+          :key="m.id"
+        >
           <td><code>{{ m.code }}</code></td>
           <td>{{ m.name }}</td>
           <td>{{ m.description || '—' }}</td>
-          <td><span class="badge" :class="m.estado === 'ACTIVO' ? 'badge-active' : 'badge-inactive'">{{ m.estado }}</span></td>
+          <td>
+            <span
+              class="badge"
+              :class="m.estado === 'ACTIVO' ? 'badge-active' : 'badge-inactive'"
+            >{{ m.estado }}</span>
+          </td>
           <td class="actions-cell">
-            <button class="icon-btn edit" @click="openEdit(m)"><AppIcon name="pencil" size="16" /></button>
-            <button class="icon-btn delete" @click="handleDelete(m)"><AppIcon name="trash-2" size="16" /></button>
+            <button
+              class="icon-btn edit"
+              @click="openEdit(m)"
+            >
+              <AppIcon
+                name="pencil"
+                size="16"
+              />
+            </button>
+            <button
+              class="icon-btn delete"
+              @click="handleDelete(m)"
+            >
+              <AppIcon
+                name="trash-2"
+                size="16"
+              />
+            </button>
           </td>
         </tr>
       </tbody>
     </table>
-    <ModalWrapper v-if="showModal" @close="closeModal">
+    <ModalWrapper
+      v-if="showModal"
+      @close="closeModal"
+    >
       <div class="modal-form">
         <h2>{{ editingModule ? 'Editar modulo' : 'Nuevo modulo' }}</h2>
-        <div class="field"><label>Codigo</label><input v-model="form.code" required /></div>
-        <div class="field"><label>Nombre</label><input v-model="form.name" required /></div>
-        <div class="field"><label>Descripcion</label><input v-model="form.description" /></div>
-        <p v-if="formError" class="error">{{ formError }}</p>
+        <div class="field">
+          <label>Codigo</label><input
+            v-model="form.code"
+            required
+          >
+        </div>
+        <div class="field">
+          <label>Nombre</label><input
+            v-model="form.name"
+            required
+          >
+        </div>
+        <div class="field">
+          <label>Descripcion</label><input v-model="form.description">
+        </div>
+        <p
+          v-if="formError"
+          class="error"
+        >
+          {{ formError }}
+        </p>
         <div class="modal-actions">
-          <button class="secondary-button" @click="closeModal">Cancelar</button>
-          <button class="primary-button" :disabled="saving" @click="saveModule">{{ saving ? 'Guardando...' : 'Guardar' }}</button>
+          <button
+            class="secondary-button"
+            @click="closeModal"
+          >
+            Cancelar
+          </button>
+          <button
+            class="primary-button"
+            :disabled="saving"
+            @click="saveModule"
+          >
+            {{ saving ? 'Guardando...' : 'Guardar' }}
+          </button>
         </div>
       </div>
     </ModalWrapper>
@@ -41,11 +126,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { modulesService } from '../services/modules.service'
+import { useMenuStore } from '../stores/menu'
 import type { SystemModule } from '../types'
 import AppIcon from '../components/AppIcon.vue'
 import ModalWrapper from '../components/ModalWrapper.vue'
 
+const router = useRouter()
+const menuStore = useMenuStore()
 const modules = ref<SystemModule[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -68,16 +157,26 @@ async function loadModules() {
 async function saveModule() {
   saving.value = true; formError.value = ''
   try {
-    if (editingModule.value) await modulesService.update(editingModule.value.id, form.value)
-    else await modulesService.create({ code: form.value.code, name: form.value.name, description: form.value.description || undefined })
-    closeModal(); await loadModules()
+    if (editingModule.value) {
+      await modulesService.update(editingModule.value.id, form.value)
+      menuStore.updateModule(editingModule.value.id, form.value)
+    } else {
+      const { data } = await modulesService.create({ code: form.value.code, name: form.value.name, description: form.value.description || undefined })
+      modules.value.push(data)
+      menuStore.addModule(data)
+    }
+    closeModal()
   } catch (e: unknown) { formError.value = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Error al guardar' }
   finally { saving.value = false }
 }
 
 async function handleDelete(m: SystemModule) {
   if (!confirm(`¿Eliminar modulo ${m.name}?`)) return
-  try { await modulesService.remove(m.id); await loadModules() }
+  try {
+    await modulesService.remove(m.id)
+    modules.value = modules.value.filter((x) => x.id !== m.id)
+    menuStore.removeModule(router, m.id)
+  }
   catch { error.value = 'Error al eliminar modulo' }
 }
 

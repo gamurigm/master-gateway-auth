@@ -4,37 +4,76 @@
       <span class="eyebrow">Panel principal</span>
       <h1>Inicio</h1>
     </div>
-    <div class="hero-section" v-if="authStore.currentRole">
-      <AppIcon name="shield" size="28" />
+    <div
+      v-if="authStore.currentRole"
+      class="hero-section"
+    >
+      <AppIcon
+        name="shield"
+        size="28"
+      />
       <div>
-        <p class="hero-label">Rol activo</p>
-        <p class="hero-value">{{ authStore.currentRole.name }}</p>
+        <p class="hero-label">
+          Rol activo
+        </p>
+        <p class="hero-value">
+          {{ authStore.currentRole.name }}
+        </p>
       </div>
     </div>
     <template v-if="state === 'loading'">
-      <div class="list-state"><div class="state-spinner" /> Cargando...</div>
+      <div class="list-state">
+        <div class="state-spinner" /> Cargando...
+      </div>
     </template>
     <template v-else-if="state === 'error'">
       <div class="error-state">
-        <AppIcon name="alert-triangle" size="24" />
+        <AppIcon
+          name="alert-triangle"
+          size="24"
+        />
         <p>Error al cargar atajos</p>
-        <button class="secondary-button" @click="loadShortcuts">Reintentar</button>
+        <button
+          class="secondary-button"
+          @click="loadShortcuts"
+        >
+          Reintentar
+        </button>
       </div>
     </template>
     <template v-else-if="state === 'empty'">
       <div class="empty-state">
-        <AppIcon name="layout-dashboard" size="24" />
+        <AppIcon
+          name="layout-dashboard"
+          size="24"
+        />
         <p>No hay accesos directos disponibles</p>
       </div>
     </template>
-    <div v-else class="quick-grid">
-      <template v-for="item in shortcuts" :key="item.id">
-        <router-link v-if="item.url?.startsWith('/app/')" :to="item.url" class="quick-card">
+    <div
+      v-else
+      class="quick-grid"
+    >
+      <template
+        v-for="item in shortcuts"
+        :key="item.id"
+      >
+        <router-link
+          v-if="item.url?.startsWith('/app/')"
+          :to="item.url"
+          class="quick-card"
+        >
           <span class="quick-icon">{{ item.icon?.[0] || item.name[0] }}</span>
           <span class="quick-module">{{ item._module }}</span>
           <span class="quick-name">{{ item.name }}</span>
         </router-link>
-        <a v-else-if="item.url" :href="item.url" target="_blank" rel="noopener noreferrer" class="quick-card">
+        <a
+          v-else-if="item.url"
+          :href="item.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="quick-card"
+        >
           <span class="quick-icon">{{ item.icon?.[0] || item.name[0] }}</span>
           <span class="quick-module">{{ item._module }}</span>
           <span class="quick-name">{{ item.name }}</span>

@@ -356,7 +356,6 @@ export class AuthService {
       'RSA-OAEP-256',
     );
 
-
     const accessToken = await new EncryptJWT({
       sub: userId,
       jti: accessJti,

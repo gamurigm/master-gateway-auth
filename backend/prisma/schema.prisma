@@ -13,34 +13,35 @@ enum Estado {
 }
 
 model User {
-  id           String         @id @default(uuid()) @db.Uuid
-  email        String         @unique
-  passwordHash String         @map("password_hash")
-  firstName    String         @map("nombres")
-  lastName     String?        @map("apellidos")
-  estado       Estado         @default(ACTIVO)
-  createdAt    DateTime       @default(now()) @map("fecha_creacion")
-  updatedAt    DateTime       @updatedAt @map("fecha_actualizacion")
-  createdBy    String?        @map("creado_por") @db.Uuid
-  updatedBy    String?        @map("actualizado_por") @db.Uuid
-  roles        UserRole[]
+  id            String         @id @default(uuid()) @db.Uuid
+  email         String         @unique
+  passwordHash  String         @map("password_hash")
+  firstName     String         @map("nombres")
+  lastName      String?        @map("apellidos")
+  estado        Estado         @default(ACTIVO)
+  createdAt     DateTime       @default(now()) @map("fecha_creacion")
+  updatedAt     DateTime       @updatedAt @map("fecha_actualizacion")
+  createdBy     String?        @map("creado_por") @db.Uuid
+  updatedBy     String?        @map("actualizado_por") @db.Uuid
+  roles         UserRole[]
   refreshTokens RefreshToken[]
 
   @@map("usuarios")
 }
 
 model Role {
-  id          String       @id @default(uuid()) @db.Uuid
-  name        String       @unique @map("nombre")
-  description String?      @map("descripcion")
-  estado      Estado       @default(ACTIVO)
-  createdAt   DateTime     @default(now()) @map("fecha_creacion")
-  updatedAt   DateTime     @updatedAt @map("fecha_actualizacion")
-  createdBy   String?      @map("creado_por") @db.Uuid
-  updatedBy   String?      @map("actualizado_por") @db.Uuid
-  users       UserRole[]
-  modules     RoleModule[]
-  menus       RoleMenu[]
+  id            String           @id @default(uuid()) @db.Uuid
+  name          String           @unique @map("nombre")
+  description   String?          @map("descripcion")
+  estado        Estado           @default(ACTIVO)
+  createdAt     DateTime         @default(now()) @map("fecha_creacion")
+  updatedAt     DateTime         @updatedAt @map("fecha_actualizacion")
+  createdBy     String?          @map("creado_por") @db.Uuid
+  updatedBy     String?          @map("actualizado_por") @db.Uuid
+  users         UserRole[]
+  modules       RoleModule[]
+  menus         RoleMenu[]
+  permissions   RolePermission[]
   refreshTokens RefreshToken[]
 
   @@map("roles")
@@ -63,15 +64,15 @@ model UserRole {
 }
 
 model SystemModule {
-  id          String       @id @default(uuid()) @db.Uuid
-  code        String       @unique @map("codigo")
-  name        String       @map("nombre")
-  description String?      @map("descripcion")
-  estado      Estado       @default(ACTIVO)
-  createdAt   DateTime     @default(now()) @map("fecha_creacion")
-  updatedAt   DateTime     @updatedAt @map("fecha_actualizacion")
-  createdBy   String?      @map("creado_por") @db.Uuid
-  updatedBy   String?      @map("actualizado_por") @db.Uuid
+  id          String            @id @default(uuid()) @db.Uuid
+  code        String            @unique @map("codigo")
+  name        String            @map("nombre")
+  description String?           @map("descripcion")
+  estado      Estado            @default(ACTIVO)
+  createdAt   DateTime          @default(now()) @map("fecha_creacion")
+  updatedAt   DateTime          @updatedAt @map("fecha_actualizacion")
+  createdBy   String?           @map("creado_por") @db.Uuid
+  updatedBy   String?           @map("actualizado_por") @db.Uuid
   menus       Menu[]
   roles       RoleModule[]
   services    ExternalService[]
@@ -86,28 +87,63 @@ model SystemModule {
 /// esa navegacion automaticamente. Es lo que hace que el ecosistema sea
 /// extensible sin tocar codigo del frontend ni del backend.
 model ExternalService {
-  id          String        @id @default(uuid()) @db.Uuid
-  code        String        @unique @map("codigo")
-  name        String        @map("nombre")
-  description String?       @map("descripcion")
-  baseUrl     String        @map("base_url")
-  healthPath  String        @default("/health") @map("health_path")
-  openApiPath String?       @map("openapi_path")
+  id          String                 @id @default(uuid()) @db.Uuid
+  code        String                 @unique @map("codigo")
+  name        String                 @map("nombre")
+  description String?                @map("descripcion")
+  /// Tipo de servicio: NATIVE (desarrollo propio) o EXTERNAL (terceros).
+  type        String?                @default("NATIVE") @map("tipo")
+  version     String?                @map("version")
+  baseUrl     String                 @map("base_url")
+  healthPath  String                 @default("/health") @map("health_path")
+  /// Endpoint de metadata estandar (/internal/metadata).
+  metadataEndpoint String?            @map("metadata_endpoint")
+  openApiPath String?                @map("openapi_path")
+  /// Estrategia de autenticacion que usa el servicio (JWT, API_KEY, MTLS, OIDC, NONE).
+  authenticationType String?          @default("JWT") @map("tipo_autenticacion")
   /// Resultado de la ultima comprobacion de disponibilidad.
-  lastProbeAt DateTime?     @map("ultima_verificacion")
-  lastProbeOk Boolean?      @map("ultima_verificacion_ok")
-  lastProbeMs Int?          @map("ultima_verificacion_ms")
+  lastProbeAt DateTime?              @map("ultima_verificacion")
+  lastProbeOk Boolean?               @map("ultima_verificacion_ok")
+  lastProbeMs Int?                   @map("ultima_verificacion_ms")
+  /// Estado de salud derivado del ultimo probe: HEALTHY, DEGRADED, UNREACHABLE, UNKNOWN.
+  status    String?                  @default("UNKNOWN") @map("estado_salud")
+  /// Ultima sincronizacion de metadata.
+  lastSync  DateTime?                @map("ultima_sincronizacion")
   /// Modulo generado por `provision`. Null mientras el servicio no se haya aprovisionado.
-  moduleId    String?       @map("modulo_id") @db.Uuid
-  estado      Estado        @default(ACTIVO)
-  createdAt   DateTime      @default(now()) @map("fecha_creacion")
-  updatedAt   DateTime      @updatedAt @map("fecha_actualizacion")
-  createdBy   String?       @map("creado_por") @db.Uuid
-  updatedBy   String?       @map("actualizado_por") @db.Uuid
-  module      SystemModule? @relation(fields: [moduleId], references: [id])
+  moduleId    String?                @map("modulo_id") @db.Uuid
+  estado      Estado                 @default(ACTIVO)
+  createdAt   DateTime               @default(now()) @map("fecha_creacion")
+  updatedAt   DateTime               @updatedAt @map("fecha_actualizacion")
+  createdBy   String?                @map("creado_por") @db.Uuid
+  updatedBy   String?                @map("actualizado_por") @db.Uuid
+  module      SystemModule?          @relation(fields: [moduleId], references: [id])
+  routes      ExternalServiceRoute[]
 
   @@index([moduleId])
   @@map("servicios_externos")
+}
+
+/// Ruta de proxy asociada a un item de menu creado desde la UI.
+///
+/// El Gateway resuelve cada peticion usando esta tabla: no conoce carpetas,
+/// repositorios, contenedores ni nombres especiales de microservicios.
+model ExternalServiceRoute {
+  id         String          @id @default(uuid()) @db.Uuid
+  serviceId  String          @map("servicio_id") @db.Uuid
+  menuId     String          @unique @map("menu_id") @db.Uuid
+  publicPath String          @unique @map("ruta_publica")
+  targetPath String          @map("ruta_destino")
+  methods    String[]        @default(["GET"]) @map("metodos")
+  estado     Estado          @default(ACTIVO)
+  createdAt  DateTime        @default(now()) @map("fecha_creacion")
+  updatedAt  DateTime        @updatedAt @map("fecha_actualizacion")
+  createdBy  String?         @map("creado_por") @db.Uuid
+  updatedBy  String?         @map("actualizado_por") @db.Uuid
+  service    ExternalService @relation(fields: [serviceId], references: [id])
+  menu       Menu            @relation(fields: [menuId], references: [id])
+
+  @@index([serviceId])
+  @@map("servicio_externo_rutas")
 }
 
 model RoleModule {
@@ -127,22 +163,23 @@ model RoleModule {
 }
 
 model Menu {
-  id        String       @id @default(uuid()) @db.Uuid
-  name      String       @map("nombre")
-  url       String?
-  icon      String?      @map("icono")
-  order     Int          @default(0) @map("orden")
-  moduleId  String       @map("modulo_id") @db.Uuid
-  parentId  String?      @map("parent_id") @db.Uuid
-  estado    Estado       @default(ACTIVO)
-  createdAt DateTime     @default(now()) @map("fecha_creacion")
-  updatedAt DateTime     @updatedAt @map("fecha_actualizacion")
-  createdBy String?      @map("creado_por") @db.Uuid
-  updatedBy String?      @map("actualizado_por") @db.Uuid
-  module    SystemModule @relation(fields: [moduleId], references: [id])
-  parent    Menu?        @relation("MenuTree", fields: [parentId], references: [id])
-  children  Menu[]       @relation("MenuTree")
-  roles     RoleMenu[]
+  id         String                @id @default(uuid()) @db.Uuid
+  name       String                @map("nombre")
+  url        String?
+  icon       String?               @map("icono")
+  order      Int                   @default(0) @map("orden")
+  moduleId   String                @map("modulo_id") @db.Uuid
+  parentId   String?               @map("parent_id") @db.Uuid
+  estado     Estado                @default(ACTIVO)
+  createdAt  DateTime              @default(now()) @map("fecha_creacion")
+  updatedAt  DateTime              @updatedAt @map("fecha_actualizacion")
+  createdBy  String?               @map("creado_por") @db.Uuid
+  updatedBy  String?               @map("actualizado_por") @db.Uuid
+  module     SystemModule          @relation(fields: [moduleId], references: [id])
+  parent     Menu?                 @relation("MenuTree", fields: [parentId], references: [id])
+  children   Menu[]                @relation("MenuTree")
+  roles      RoleMenu[]
+  proxyRoute ExternalServiceRoute?
 
   @@index([parentId])
   @@index([moduleId])
@@ -165,25 +202,67 @@ model RoleMenu {
   @@map("rol_menus")
 }
 
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique @map("codigo")
+  resource    String           @map("recurso")
+  action      String           @map("accion")
+  description String?          @map("descripcion")
+  delegable   Boolean          @default(false)
+  estado      Estado           @default(ACTIVO)
+  createdAt   DateTime         @default(now()) @map("fecha_creacion")
+  updatedAt   DateTime         @updatedAt @map("fecha_actualizacion")
+  createdBy   String?          @map("creado_por") @db.Uuid
+  updatedBy   String?          @map("actualizado_por") @db.Uuid
+  roles       RolePermission[]
+
+  @@map("permisos")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid()) @db.Uuid
+  roleId       String     @map("rol_id") @db.Uuid
+  permissionId String     @map("permiso_id") @db.Uuid
+  estado       Estado     @default(ACTIVO)
+  createdAt    DateTime   @default(now()) @map("fecha_creacion")
+  updatedAt    DateTime   @updatedAt @map("fecha_actualizacion")
+  createdBy    String?    @map("creado_por") @db.Uuid
+  updatedBy    String?    @map("actualizado_por") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@map("rol_permisos")
+}
+
 model RefreshToken {
-  id                    String    @id @default(uuid()) @db.Uuid
-  userId                String    @map("usuario_id") @db.Uuid
-  roleId                String    @map("rol_id") @db.Uuid
-  jti                   String    @unique
-  tokenHash             String    @map("token_hash")
-  expiresAt             DateTime  @map("expira_en")
-  revokedAt             DateTime? @map("revocado_en")
-  replacedByJti         String?   @map("reemplazado_por_jti")
-  reuseDetected         Boolean   @default(false) @map("reutilizacion_detectada")
-  estado                Estado    @default(ACTIVO)
-  createdAt             DateTime  @default(now()) @map("fecha_creacion")
-  updatedAt             DateTime  @updatedAt @map("fecha_actualizacion")
-  createdBy             String?   @map("creado_por") @db.Uuid
-  updatedBy             String?   @map("actualizado_por") @db.Uuid
-  user                  User      @relation(fields: [userId], references: [id])
-  role                  Role      @relation(fields: [roleId], references: [id])
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("usuario_id") @db.Uuid
+  roleId        String    @map("rol_id") @db.Uuid
+  jti           String    @unique
+  tokenHash     String    @map("token_hash")
+  expiresAt     DateTime  @map("expira_en")
+  revokedAt     DateTime? @map("revocado_en")
+  replacedByJti String?   @map("reemplazado_por_jti")
+  reuseDetected Boolean   @default(false) @map("reutilizacion_detectada")
+  estado        Estado    @default(ACTIVO)
+  createdAt     DateTime  @default(now()) @map("fecha_creacion")
+  updatedAt     DateTime  @updatedAt @map("fecha_actualizacion")
+  createdBy     String?   @map("creado_por") @db.Uuid
+  updatedBy     String?   @map("actualizado_por") @db.Uuid
+  user          User      @relation(fields: [userId], references: [id])
+  role          Role      @relation(fields: [roleId], references: [id])
 
   @@index([userId])
   @@index([roleId])
   @@map("refresh_tokens")
+}
+
+model SeedRun {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @map("nombre")
+  createdAt DateTime @default(now()) @map("fecha_creacion")
+  updatedAt DateTime @updatedAt @map("fecha_actualizacion")
+
+  @@map("_seed_runs")
 }

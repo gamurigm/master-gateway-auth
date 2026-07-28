@@ -99,7 +99,9 @@ export interface ValidatedTarget {
  *
  * @throws BadRequestException si el destino no es alcanzable de forma segura.
  */
-export async function assertSafeProbeTarget(rawUrl: string): Promise<ValidatedTarget> {
+export async function assertSafeProbeTarget(
+  rawUrl: string,
+): Promise<ValidatedTarget> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -137,7 +139,10 @@ export async function assertSafeProbeTarget(rawUrl: string): Promise<ValidatedTa
     return { url, address };
   }
 
-  const reason = isIP(address) === 6 ? blockedReasonForIpv6(address) : blockedReasonForIpv4(address);
+  const reason =
+    isIP(address) === 6
+      ? blockedReasonForIpv6(address)
+      : blockedReasonForIpv4(address);
 
   if (reason) {
     throw new BadRequestException(

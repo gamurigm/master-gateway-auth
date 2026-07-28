@@ -1,3 +1,4 @@
+
 # Diagramas de secuencia
 
 Los diagramas §8 del enunciado, más el flujo de registro de microservicios

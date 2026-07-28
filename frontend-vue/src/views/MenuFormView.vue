@@ -3,18 +3,75 @@
     <div class="admin-header">
       <span class="eyebrow">Navegacion</span>
       <h1>{{ isEdit ? 'Editar menu' : 'Nuevo menu' }}</h1>
-      <router-link to="/app/menus" class="secondary-button">Volver</router-link>
+      <router-link
+        to="/app/menus"
+        class="secondary-button"
+      >
+        Volver
+      </router-link>
     </div>
     <div class="admin-card">
       <form @submit.prevent="saveMenu">
-        <div class="field"><label>Nombre</label><input v-model="form.name" required /></div>
-        <div class="field"><label>Ruta (URL)</label><input v-model="form.url" /></div>
-        <div class="field"><label>Icono</label><input v-model="form.icon" /></div>
-        <div class="field"><label>Orden</label><input v-model.number="form.order" type="number" /></div>
-        <div class="field"><label>Modulo</label><select v-model="form.moduleId" required><option value="">Seleccionar...</option><option v-for="mod in allModules" :key="mod.id" :value="mod.id">{{ mod.name }}</option></select></div>
-        <div class="field"><label>Menu padre</label><select v-model="form.parentId"><option value="">— Ninguno —</option><option v-for="m in allMenus" :key="m.id" :value="m.id">{{ m.name }}</option></select></div>
-        <p v-if="error" class="error">{{ error }}</p>
-        <button type="submit" class="primary-button" :disabled="saving">{{ saving ? 'Guardando...' : 'Guardar' }}</button>
+        <div class="field">
+          <label>Nombre</label><input
+            v-model="form.name"
+            required
+          >
+        </div>
+        <div class="field">
+          <label>Ruta (URL)</label><input v-model="form.url">
+        </div>
+        <div class="field">
+          <label>Icono</label><input v-model="form.icon">
+        </div>
+        <div class="field">
+          <label>Orden</label><input
+            v-model.number="form.order"
+            type="number"
+          >
+        </div>
+        <div class="field">
+          <label>Modulo</label><select
+            v-model="form.moduleId"
+            required
+          >
+            <option value="">
+              Seleccionar...
+            </option><option
+              v-for="mod in allModules"
+              :key="mod.id"
+              :value="mod.id"
+            >
+              {{ mod.name }}
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Menu padre</label><select v-model="form.parentId">
+            <option value="">
+              — Ninguno —
+            </option><option
+              v-for="m in allMenus"
+              :key="m.id"
+              :value="m.id"
+            >
+              {{ m.name }}
+            </option>
+          </select>
+        </div>
+        <p
+          v-if="error"
+          class="error"
+        >
+          {{ error }}
+        </p>
+        <button
+          type="submit"
+          class="primary-button"
+          :disabled="saving"
+        >
+          {{ saving ? 'Guardando...' : 'Guardar' }}
+        </button>
       </form>
     </div>
   </div>
@@ -25,10 +82,12 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { menuService } from '../services/menu.service'
 import { modulesService } from '../services/modules.service'
+import { useMenuStore } from '../stores/menu'
 import type { SystemModule, Menu } from '../types'
 
 const route = useRoute()
 const router = useRouter()
+const menuStore = useMenuStore()
 const isEdit = computed(() => !!route.params.id)
 const saving = ref(false)
 const error = ref('')
@@ -46,6 +105,7 @@ async function saveMenu() {
     if (form.value.parentId) dto.parentId = form.value.parentId
     if (isEdit.value) await menuService.update(route.params.id as string, dto)
     else await menuService.create(dto as { name: string; moduleId: string })
+    await menuStore.load(router, true)
     router.push('/app/menus')
   } catch (e: unknown) { error.value = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Error al guardar' }
   finally { saving.value = false }

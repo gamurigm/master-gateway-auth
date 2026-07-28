@@ -11,12 +11,12 @@
 - Login emite solo `tempToken`; el `accessToken` definitivo se emite despues de seleccionar rol.
 - Refresh token persistido como hash y rotado en cada uso.
 - Reutilizacion de refresh token marca la familia activa como inactiva.
-- CRUD administrativo protegido por JWT y rol `ADMIN`.
+- CRUD administrativo protegido por JWT y rol `ADMIN`; `SUPER_ADMIN` pasa cualquier `RequireRoles` administrativo. En usuarios, `ADMIN` solo inactiva/bloquea y `SUPER_ADMIN` puede borrar fisicamente.
 - Microservicio hijo `ventas` valida tokens contra el Master antes de responder.
 - Endpoint interno protegido por API key y allowlist `INTERNAL_ALLOWED_SERVICES`.
 - Logs estructurados con `x-request-id`, estado HTTP, duracion y contexto de usuario/rol cuando existe.
 - Eventos de autenticacion registrados sin passwords ni tokens.
-- Soft delete con `estado = INACTIVO`.
+- Soft delete con `estado = INACTIVO` para entidades administrativas y asignaciones. El borrado fisico de usuarios queda reservado a `SUPER_ADMIN` y limpia refresh tokens/asignaciones.
 - Validacion de variables de entorno al arranque.
 - Analisis SAST/ML con CodeBERT dockerizado (codebert-sast) para el pipeline, con mapeo CWE + OWASP Top 10 : 2025.
 - En produccion se rechazan secretos con valores `change-me-*`.
@@ -50,7 +50,6 @@ Mitigaciones aplicadas (`backend/src/external-services/ssrf-guard.ts`):
 - `npm audit --omit=dev` reporta `multer@2.1.1` por `@nestjs/platform-express@11.1.27`.
   Nest `latest` y `next` aun fijan esa version; `npm audit fix --force` propone downgrade a Nest 7, por eso no se aplico.
 - El frontend guarda tokens en `localStorage`. Para endurecer contra XSS, se recomienda migrar a cookies `HttpOnly` + CSRF.
-- Falta autorizacion granular por permiso/menu; actualmente el CRUD administrativo se limita por rol `ADMIN`.
+- Falta autorizacion granular por permiso/menu en todo el CRUD; actualmente el acceso administrativo se limita por rol `ADMIN`, con bypass explicito de `SUPER_ADMIN`. La asignacion de permisos bloquea auto-modificacion del rol activo, exige que `ADMIN` ya tenga el permiso que delega y reserva permisos no delegables para `SUPER_ADMIN`.
 - Falta blacklist temporal de `jti` de access tokens para invalidacion inmediata.
-- Falta ampliar el microservicio hijo con permisos granulares por menu/accion; por ahora autoriza roles `ADMIN` y `VENTAS`.
-
+- Falta ampliar el microservicio hijo con permisos granulares por menu/accion; por ahora autoriza roles `SUPER_ADMIN`, `ADMIN` y `VENTAS`.

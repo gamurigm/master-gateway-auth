@@ -1,5 +1,15 @@
-import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { Sanitize } from '../../common/decorators/sanitize.decorator';
+
+const SERVICE_TYPES = ['NATIVE', 'EXTERNAL'] as const;
+const AUTH_TYPES = ['JWT', 'API_KEY', 'MTLS', 'OIDC', 'NONE'] as const;
 
 /**
  * El `code` no es actualizable a proposito: identifica al modulo generado por
@@ -22,6 +32,18 @@ export class UpdateExternalServiceDto {
   @Sanitize()
   @IsOptional()
   @IsString()
+  @IsIn(SERVICE_TYPES, { message: 'type debe ser NATIVE o EXTERNAL' })
+  type?: string;
+
+  @Sanitize()
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  version?: string;
+
+  @Sanitize()
+  @IsOptional()
+  @IsString()
   @MaxLength(2048)
   @Matches(/^https?:\/\/.+/i, {
     message: 'baseUrl debe empezar por http:// o https://',
@@ -39,6 +61,21 @@ export class UpdateExternalServiceDto {
   @IsOptional()
   @IsString()
   @MaxLength(512)
+  @Matches(/^\/[\w\-./]*$/, { message: 'metadataEndpoint debe empezar por /' })
+  metadataEndpoint?: string;
+
+  @Sanitize()
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
   @Matches(/^\/[\w\-./]*$/, { message: 'openApiPath debe empezar por /' })
   openApiPath?: string;
+
+  @Sanitize()
+  @IsOptional()
+  @IsString()
+  @IsIn(AUTH_TYPES, {
+    message: 'authenticationType debe ser JWT, API_KEY, MTLS, OIDC o NONE',
+  })
+  authenticationType?: string;
 }

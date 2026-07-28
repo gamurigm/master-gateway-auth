@@ -45,7 +45,7 @@ spec:
             - name: MASTER_INTERNAL_SERVICE_NAME
               value: "ventas"
             - name: VENTAS_ALLOWED_ROLES
-              value: "ADMIN,VENTAS"
+              value: "SUPER_ADMIN,ADMIN,VENTAS"
             # Zero Trust: misma credencial compartida que el Master (INTERNAL_API_KEY).
             - name: MASTER_INTERNAL_API_KEY
               valueFrom:

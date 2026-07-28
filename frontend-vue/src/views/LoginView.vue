@@ -2,27 +2,64 @@
   <main class="auth-page">
     <div class="auth-panel">
       <div class="auth-header">
-        <AppIcon name="shield" size="40" />
+        <AppIcon
+          name="shield"
+          size="40"
+        />
         <h1>Master Gateway</h1>
         <p>Panel de administracion</p>
       </div>
-      <form @submit.prevent="handleLogin" class="auth-form">
+      <form
+        class="auth-form"
+        @submit.prevent="handleLogin"
+      >
         <div class="field">
           <label for="email">Correo electronico</label>
-          <input id="email" v-model="email" type="email" placeholder="admin@espe.edu.ec" required />
+          <input
+            id="email"
+            v-model="email"
+            type="email"
+            placeholder="admin@espe.edu.ec"
+            required
+          >
         </div>
         <div class="field">
           <label for="password">Contrasena</label>
           <div class="password-wrapper">
-            <input id="password" v-model="password" :type="showPass ? 'text' : 'password'" placeholder="Ingrese su contrasena" required />
-            <button type="button" class="toggle-pass" @click="showPass = !showPass">
-              <AppIcon :name="showPass ? 'EyeOff' : 'Eye'" size="18" />
+            <input
+              id="password"
+              v-model="password"
+              :type="showPass ? 'text' : 'password'"
+              placeholder="Ingrese su contrasena"
+              required
+            >
+            <button
+              type="button"
+              class="toggle-pass"
+              @click="showPass = !showPass"
+            >
+              <AppIcon
+                :name="showPass ? 'EyeOff' : 'Eye'"
+                size="18"
+              />
             </button>
           </div>
         </div>
-        <p v-if="error" class="error">{{ error }}</p>
-        <button type="submit" class="primary-button" :disabled="loading">
-          <span v-if="loading" class="state-spinner" />
+        <p
+          v-if="error"
+          class="error"
+        >
+          {{ error }}
+        </p>
+        <button
+          type="submit"
+          class="primary-button"
+          :disabled="loading"
+        >
+          <span
+            v-if="loading"
+            class="state-spinner"
+          />
           <span v-else>Iniciar sesion</span>
         </button>
       </form>

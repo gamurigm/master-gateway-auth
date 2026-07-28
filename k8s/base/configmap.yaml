@@ -24,5 +24,5 @@ data:
   # Ventas (microservicio hijo) valida contra el Master.
   MASTER_VALIDATE_URL: "http://backend:3000/api/internals/validate-token"
   MASTER_INTERNAL_SERVICE_NAME: "ventas"
-  VENTAS_ALLOWED_ROLES: "ADMIN,VENTAS"
+  VENTAS_ALLOWED_ROLES: "SUPER_ADMIN,ADMIN,VENTAS"
   VENTAS_PORT: "3006"

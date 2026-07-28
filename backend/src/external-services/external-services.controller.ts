@@ -29,7 +29,9 @@ const UUIDv4 = new ParseUUIDPipe({ version: '4' });
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('external-services')
 export class ExternalServicesController {
-  constructor(private readonly externalServicesService: ExternalServicesService) {}
+  constructor(
+    private readonly externalServicesService: ExternalServicesService,
+  ) {}
 
   @Get()
   findAll() {
@@ -56,7 +58,10 @@ export class ExternalServicesController {
   }
 
   @Post()
-  create(@Body() dto: CreateExternalServiceDto, @CurrentUser() user: AuthenticatedUser) {
+  create(
+    @Body() dto: CreateExternalServiceDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.externalServicesService.create(dto, user.sub);
   }
 
@@ -64,7 +69,10 @@ export class ExternalServicesController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post(':id/probe')
   @HttpCode(HttpStatus.OK)
-  probeExisting(@Param('id', UUIDv4) id: string, @CurrentUser() user: AuthenticatedUser) {
+  probeExisting(
+    @Param('id', UUIDv4) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.externalServicesService.probeExisting(id, user.sub);
   }
 
@@ -88,7 +96,10 @@ export class ExternalServicesController {
   }
 
   @Delete(':id')
-  remove(@Param('id', UUIDv4) id: string, @CurrentUser() user: AuthenticatedUser) {
+  remove(
+    @Param('id', UUIDv4) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.externalServicesService.remove(id, user.sub);
   }
 }

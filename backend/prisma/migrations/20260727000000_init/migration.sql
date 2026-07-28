@@ -64,6 +64,28 @@ CREATE TABLE "modulos" (
 );
 
 -- CreateTable
+CREATE TABLE "servicios_externos" (
+    "id" UUID NOT NULL,
+    "codigo" TEXT NOT NULL,
+    "nombre" TEXT NOT NULL,
+    "descripcion" TEXT,
+    "base_url" TEXT NOT NULL,
+    "health_path" TEXT NOT NULL DEFAULT '/health',
+    "openapi_path" TEXT,
+    "ultima_verificacion" TIMESTAMP(3),
+    "ultima_verificacion_ok" BOOLEAN,
+    "ultima_verificacion_ms" INTEGER,
+    "modulo_id" UUID,
+    "estado" "Estado" NOT NULL DEFAULT 'ACTIVO',
+    "fecha_creacion" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "fecha_actualizacion" TIMESTAMP(3) NOT NULL,
+    "creado_por" UUID,
+    "actualizado_por" UUID,
+
+    CONSTRAINT "servicios_externos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "rol_modulos" (
     "id" UUID NOT NULL,
     "rol_id" UUID NOT NULL,
@@ -110,6 +132,37 @@ CREATE TABLE "rol_menus" (
 );
 
 -- CreateTable
+CREATE TABLE "permisos" (
+    "id" UUID NOT NULL,
+    "codigo" TEXT NOT NULL,
+    "recurso" TEXT NOT NULL,
+    "accion" TEXT NOT NULL,
+    "descripcion" TEXT,
+    "delegable" BOOLEAN NOT NULL DEFAULT false,
+    "estado" "Estado" NOT NULL DEFAULT 'ACTIVO',
+    "fecha_creacion" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "fecha_actualizacion" TIMESTAMP(3) NOT NULL,
+    "creado_por" UUID,
+    "actualizado_por" UUID,
+
+    CONSTRAINT "permisos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "rol_permisos" (
+    "id" UUID NOT NULL,
+    "rol_id" UUID NOT NULL,
+    "permiso_id" UUID NOT NULL,
+    "estado" "Estado" NOT NULL DEFAULT 'ACTIVO',
+    "fecha_creacion" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "fecha_actualizacion" TIMESTAMP(3) NOT NULL,
+    "creado_por" UUID,
+    "actualizado_por" UUID,
+
+    CONSTRAINT "rol_permisos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "refresh_tokens" (
     "id" UUID NOT NULL,
     "usuario_id" UUID NOT NULL,
@@ -142,6 +195,12 @@ CREATE UNIQUE INDEX "usuario_roles_usuario_id_rol_id_key" ON "usuario_roles"("us
 CREATE UNIQUE INDEX "modulos_codigo_key" ON "modulos"("codigo");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "servicios_externos_codigo_key" ON "servicios_externos"("codigo");
+
+-- CreateIndex
+CREATE INDEX "servicios_externos_modulo_id_idx" ON "servicios_externos"("modulo_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "rol_modulos_rol_id_modulo_id_key" ON "rol_modulos"("rol_id", "modulo_id");
 
 -- CreateIndex
@@ -152,6 +211,12 @@ CREATE INDEX "menus_modulo_id_idx" ON "menus"("modulo_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "rol_menus_rol_id_menu_id_key" ON "rol_menus"("rol_id", "menu_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "permisos_codigo_key" ON "permisos"("codigo");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "rol_permisos_rol_id_permiso_id_key" ON "rol_permisos"("rol_id", "permiso_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "refresh_tokens_jti_key" ON "refresh_tokens"("jti");
@@ -167,6 +232,9 @@ ALTER TABLE "usuario_roles" ADD CONSTRAINT "usuario_roles_usuario_id_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "usuario_roles" ADD CONSTRAINT "usuario_roles_rol_id_fkey" FOREIGN KEY ("rol_id") REFERENCES "roles"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "servicios_externos" ADD CONSTRAINT "servicios_externos_modulo_id_fkey" FOREIGN KEY ("modulo_id") REFERENCES "modulos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "rol_modulos" ADD CONSTRAINT "rol_modulos_rol_id_fkey" FOREIGN KEY ("rol_id") REFERENCES "roles"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -185,6 +253,12 @@ ALTER TABLE "rol_menus" ADD CONSTRAINT "rol_menus_rol_id_fkey" FOREIGN KEY ("rol
 
 -- AddForeignKey
 ALTER TABLE "rol_menus" ADD CONSTRAINT "rol_menus_menu_id_fkey" FOREIGN KEY ("menu_id") REFERENCES "menus"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "rol_permisos" ADD CONSTRAINT "rol_permisos_rol_id_fkey" FOREIGN KEY ("rol_id") REFERENCES "roles"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "rol_permisos" ADD CONSTRAINT "rol_permisos_permiso_id_fkey" FOREIGN KEY ("permiso_id") REFERENCES "permisos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

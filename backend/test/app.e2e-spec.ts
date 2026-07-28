@@ -150,6 +150,23 @@ describe('AppController (e2e)', () => {
       });
   });
 
+  it('/api/users (GET) allows super admin roles', async () => {
+    const token = await signAccessToken('SUPER_ADMIN');
+
+    return request(app.getHttpServer())
+      .get('/api/users')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          items: [],
+          total: 0,
+          page: 1,
+          limit: 20,
+        });
+      });
+  });
+
   afterEach(async () => {
     await app.close();
   });

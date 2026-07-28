@@ -139,14 +139,41 @@ export class MenusService {
 
   async remove(id: string, actorId: string) {
     await this.ensureActiveMenu(id);
-    await this.prisma.menu.update({
-      where: { id },
-      data: { estado: Estado.INACTIVO, updatedBy: actorId },
+    const menuIds = await this.collectActiveSubtreeIds(id);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.roleMenu.updateMany({
+        where: { menuId: { in: menuIds }, estado: Estado.ACTIVO },
+        data: { estado: Estado.INACTIVO, updatedBy: actorId },
+      });
+      await tx.externalServiceRoute.updateMany({
+        where: { menuId: { in: menuIds }, estado: Estado.ACTIVO },
+        data: { estado: Estado.INACTIVO, updatedBy: actorId },
+      });
+      await tx.menu.updateMany({
+        where: { id: { in: menuIds }, estado: Estado.ACTIVO },
+        data: { estado: Estado.INACTIVO, updatedBy: actorId },
+      });
     });
 
     return { success: true };
   }
 
+  private async collectActiveSubtreeIds(rootId: string) {
+    const ids: string[] = [];
+    let pending = [rootId];
+
+    while (pending.length > 0) {
+      ids.push(...pending);
+      const children = await this.prisma.menu.findMany({
+        where: { parentId: { in: pending }, estado: Estado.ACTIVO },
+        select: { id: true },
+      });
+      pending = children.map((child) => child.id);
+    }
+
+    return ids;
+  }
   private async ensureActiveModule(id: string) {
     const module = await this.prisma.systemModule.findFirst({
       where: { id, estado: Estado.ACTIVO },

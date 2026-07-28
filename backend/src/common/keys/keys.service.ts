@@ -1,14 +1,17 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, createPublicKey } from 'node:crypto';
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
+import { exportJWK } from 'jose';
+import type { JWK } from 'jose';
 
 @Injectable()
 export class KeysService implements OnModuleInit {
   private readonly logger = new Logger(KeysService.name);
   private privateKey = '';
   private publicKey = '';
+  private jwksCache: { keys: JWK[] } | null = null;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -24,6 +27,20 @@ export class KeysService implements OnModuleInit {
   getPublicKey(): string {
     this.ensureKeysLoaded();
     return this.publicKey;
+  }
+
+  async getJwks(): Promise<{ keys: JWK[] }> {
+    this.ensureKeysLoaded();
+    if (this.jwksCache) return this.jwksCache;
+
+    const publicKeyObject = createPublicKey(this.publicKey);
+    const jwk = await exportJWK(publicKeyObject);
+    jwk.alg = 'RSA-OAEP-256';
+    jwk.kid = 'master-gateway-v1';
+    jwk.use = 'enc';
+
+    this.jwksCache = { keys: [jwk] };
+    return this.jwksCache;
   }
 
   private ensureKeysLoaded() {
@@ -50,6 +67,7 @@ export class KeysService implements OnModuleInit {
     this.logger.log('Cargando llaves RSA existentes');
     this.privateKey = readFileSync(privPath, 'utf-8');
     this.publicKey = readFileSync(pubPath, 'utf-8');
+    this.jwksCache = null;
   }
 
   private generateKeys(privPath: string, pubPath: string) {
@@ -64,6 +82,7 @@ export class KeysService implements OnModuleInit {
 
     this.privateKey = privateKey;
     this.publicKey = publicKey;
+    this.jwksCache = null;
 
     this.logger.log(`Llaves RSA generadas:
   Private: ${privPath}

@@ -1,10 +1,15 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Estado } from '@prisma/client';
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ACTOR_ID = '22222222-2222-2222-2222-222222222222';
+const USER_ROLE_ID = '33333333-3333-3333-3333-333333333333';
 const EMAIL = 'test@example.com';
 const TEST_PASSWORD = 'Str0ng!Pass';
 
@@ -18,7 +23,18 @@ describe('UsersService', () => {
       findFirst: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      delete: jest.Mock;
       count: jest.Mock;
+    };
+    role: { findFirst: jest.Mock };
+    userRole: {
+      upsert: jest.Mock;
+      updateMany: jest.Mock;
+      deleteMany: jest.Mock;
+    };
+    refreshToken: {
+      updateMany: jest.Mock;
+      deleteMany: jest.Mock;
     };
   };
 
@@ -37,14 +53,29 @@ describe('UsersService', () => {
 
   beforeEach(() => {
     prisma = {
-      $transaction: jest.fn(),
+      $transaction: jest.fn(async (arg: unknown) => {
+        if (Array.isArray(arg)) return Promise.all(arg);
+        if (typeof arg === 'function') return arg(prisma);
+        return arg;
+      }),
       user: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
         findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
         count: jest.fn(),
+      },
+      role: { findFirst: jest.fn() },
+      userRole: {
+        upsert: jest.fn(),
+        updateMany: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+      refreshToken: {
+        updateMany: jest.fn(),
+        deleteMany: jest.fn(),
       },
     };
     jest.clearAllMocks();
@@ -54,7 +85,7 @@ describe('UsersService', () => {
   describe('findAll', () => {
     it('returns paginated active users without password', async () => {
       const user = mockUser();
-      prisma.$transaction.mockResolvedValue([[user], 1]);
+      prisma.$transaction.mockResolvedValueOnce([[user], 1]);
 
       const result = await service.findAll({ page: 1, limit: 10 });
 
@@ -86,9 +117,14 @@ describe('UsersService', () => {
   });
 
   describe('create', () => {
-    it('creates and returns user without password', async () => {
+    it('creates user with USER role and returns it without password', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue(mockUser());
+      prisma.role.findFirst.mockResolvedValue({ id: USER_ROLE_ID });
+      prisma.userRole.upsert.mockResolvedValue({
+        userId: USER_ID,
+        roleId: USER_ROLE_ID,
+      });
 
       const result = await service.create(
         {
@@ -111,6 +147,18 @@ describe('UsersService', () => {
           }),
         }),
       );
+      expect(prisma.userRole.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId_roleId: { userId: USER_ID, roleId: USER_ROLE_ID },
+          },
+          create: expect.objectContaining({
+            userId: USER_ID,
+            roleId: USER_ROLE_ID,
+            createdBy: ACTOR_ID,
+          }),
+        }),
+      );
     });
 
     it('throws ConflictException when email exists', async () => {
@@ -127,6 +175,24 @@ describe('UsersService', () => {
           ACTOR_ID,
         ),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('throws NotFoundException when default USER role is missing', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue(mockUser());
+      prisma.role.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          {
+            email: EMAIL,
+            firstName: 'Test',
+            lastName: 'User',
+            password: TEST_PASSWORD,
+          },
+          ACTOR_ID,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
@@ -160,22 +226,62 @@ describe('UsersService', () => {
   });
 
   describe('remove', () => {
-    it('soft-deletes the user', async () => {
+    it('soft-deletes and blocks the user for ADMIN', async () => {
       prisma.user.findFirst.mockResolvedValue(mockUser());
       prisma.user.update.mockResolvedValue({
         ...mockUser(),
         estado: Estado.INACTIVO,
       });
 
-      const result = await service.remove(USER_ID, ACTOR_ID);
+      const result = await service.remove(USER_ID, ACTOR_ID, 'ADMIN');
 
       expect(result).toEqual({ success: true });
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: USER_ID, estado: Estado.ACTIVO },
+          data: expect.objectContaining({ estado: Estado.INACTIVO }),
+        }),
+      );
+      expect(prisma.userRole.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: USER_ID, estado: Estado.ACTIVO },
+          data: expect.objectContaining({ estado: Estado.INACTIVO }),
+        }),
+      );
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: USER_ID },
           data: expect.objectContaining({ estado: Estado.INACTIVO }),
         }),
       );
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+
+    it('physically deletes the user for SUPER_ADMIN', async () => {
+      prisma.user.findFirst.mockResolvedValue(mockUser());
+      prisma.user.delete.mockResolvedValue(mockUser());
+
+      const result = await service.remove(USER_ID, ACTOR_ID, 'SUPER_ADMIN');
+
+      expect(result).toEqual({ success: true });
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: USER_ID },
+      });
+      expect(prisma.userRole.deleteMany).toHaveBeenCalledWith({
+        where: { userId: USER_ID },
+      });
+      expect(prisma.user.delete).toHaveBeenCalledWith({
+        where: { id: USER_ID },
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects deleting the authenticated user', async () => {
+      prisma.user.findFirst.mockResolvedValue(mockUser());
+
+      await expect(
+        service.remove(ACTOR_ID, ACTOR_ID, 'SUPER_ADMIN'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('throws NotFoundException when user is missing', async () => {

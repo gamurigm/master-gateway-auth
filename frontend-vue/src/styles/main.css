@@ -329,9 +329,40 @@ ul { list-style: none; padding: 0; margin: 0; }
 
 .brand-text small {
   display: block;
-  font-size: 11px;
+  max-width: 178px;
+  overflow: hidden;
   color: #94a3b8;
+  font-size: 11px;
   margin-top: 2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-card {
+  display: grid;
+  gap: 4px;
+  margin: 0 18px 12px;
+  padding: 12px 14px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(147, 197, 253, 0.24);
+  border-radius: 10px;
+}
+
+.session-card span {
+  color: #93c5fd;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.session-card strong {
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-nav {
@@ -629,6 +660,32 @@ ul { list-style: none; padding: 0; margin: 0; }
 .badge-inactive {
   color: #991b1b;
   background: #fee2e2;
+}
+
+.roles-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.muted-text {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .icon-btn {

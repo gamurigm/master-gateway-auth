@@ -100,6 +100,8 @@ jobs:
     outputs:
       has_code: ${{ steps.filter.outputs.has_code }}
       has_security_relevant: ${{ steps.filter.outputs.has_security_relevant }}
+      services_matrix: ${{ steps.services.outputs.matrix }}
+      has_services: ${{ steps.services.outputs.has_services }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -117,6 +119,8 @@ jobs:
               - 'frontend-vue/src/**/*.ts'
               - 'frontend-vue/src/**/*.vue'
               - 'services/**/*.ts'
+              - 'services/**/*.js'
+              - 'services/**/*.json'
             has_security_relevant:
               - 'backend/src/**/*.ts'
               - 'frontend/src/**/*.ts'
@@ -124,10 +128,75 @@ jobs:
               - 'frontend-vue/src/**/*.ts'
               - 'frontend-vue/src/**/*.vue'
               - 'services/**/*.ts'
+              - 'services/**/*.js'
               - 'backend/prisma/schema.prisma'
               - 'security/**'
               - '.github/workflows/ci-cd.yml'
               - 'sonar-project.properties'
+
+      # Detecta automáticamente qué servicios cambiaron y genera una matriz dinámica
+      - name: Detect changed services
+        id: services
+        shell: bash
+        run: |
+          # Encontrar todos los directorios de servicios
+          SERVICES=()
+          for dir in services/*/; do
+            name=$(basename "$dir")
+            SERVICES+=("$name")
+          done
+
+          # Detectar cambios en servicios (PR vs push)
+          CHANGED=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}"
+            CHANGED=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -oP '^services/\K[^/]+' | sort -u || true)
+          else
+            CHANGED=$(git diff --name-only "origin/${{ github.sha }}^1...${{ github.sha }}" 2>/dev/null | grep -oP '^services/\K[^/]+' | sort -u || true)
+            # En primera ejecución sin historial, incluir todos
+            if [ -z "$CHANGED" ]; then
+              CHANGED=$(printf '%s\n' "${SERVICES[@]}")
+            fi
+          fi
+
+          # Construir matriz solo con servicios que existen y cambiaron (o todos si no hay cambios detectados)
+          MATRIX="{\"include\":["
+          FIRST=true
+          for svc in $(echo "$CHANGED" | sort -u); do
+            if [ -d "services/$svc" ]; then
+              if [ "$FIRST" = true ]; then
+                FIRST=false
+              else
+                MATRIX="$MATRIX,"
+              fi
+              MATRIX="$MATRIX{\"service\":\"$svc\"}"
+            fi
+          done
+          MATRIX="$MATRIX]}"
+
+          # Si no hay servicios identificados, incluir todos los que existen
+          if [ "$MATRIX" = '{"include":[]}' ]; then
+            FIRST=true
+            MATRIX="{\"include\":["
+            for svc in "${SERVICES[@]}"; do
+              if [ "$FIRST" = true ]; then
+                FIRST=false
+              else
+                MATRIX="$MATRIX,"
+              fi
+              MATRIX="$MATRIX{\"service\":\"$svc\"}"
+            done
+            MATRIX="$MATRIX]}"
+          fi
+
+          HAS_SERVICES="false"
+          if [ "$MATRIX" != '{"include":[]}' ]; then
+            HAS_SERVICES="true"
+          fi
+
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "has_services=$HAS_SERVICES" >> "$GITHUB_OUTPUT"
+          echo "Detected services matrix: $MATRIX"
 
   # ──────────────────────────────────────────────────────────────
   # Build + Tests (siempre corre, es la base de todo)
@@ -167,14 +236,46 @@ jobs:
       - name: Backend e2e tests
         run: npm run test:e2e -w backend -- --runInBand
 
-      - name: Ventas build
-        run: npm run build -w ventas
-
-      - name: Ventas tests
-        run: npm run test -w ventas
-
       - name: Frontend build
         run: npm run build:frontend
+
+  # ──────────────────────────────────────────────────────────────
+  # Build dinámico de microservicios (matriz auto-detectada)
+  # Si aparece un nuevo directorio en services/, se detecta solo.
+  # ──────────────────────────────────────────────────────────────
+  services-build:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_services == 'true' && needs.detect-changes.outputs.has_code == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(needs.detect-changes.outputs.services_matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: npm
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Build ${{ matrix.service }}
+        run: |
+          if [ -f "services/${{ matrix.service }}/package.json" ]; then
+            cd "services/${{ matrix.service }}"
+            if grep -q '"build"' package.json; then
+              npm run build
+            fi
+            if grep -q '"test"' package.json; then
+              npm test
+            fi
+          else
+            echo "No package.json found for ${{ matrix.service }} - skipping"
+          fi
 
   # ──────────────────────────────────────────────────────────────
   # ESTRATEGIA 2 + 4: SonarQube corre ANTES de CodeBERT en main

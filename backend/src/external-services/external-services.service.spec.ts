@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Estado } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import { ExternalServicesService } from './external-services.service';
@@ -17,6 +21,7 @@ describe('ExternalServicesService', () => {
     menu: Record<string, jest.Mock>;
     roleModule: Record<string, jest.Mock>;
     roleMenu: Record<string, jest.Mock>;
+    externalServiceRoute: Record<string, jest.Mock>;
     $transaction: jest.Mock;
   };
   let fetchMock: jest.Mock;
@@ -43,27 +48,37 @@ describe('ExternalServicesService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn().mockResolvedValue(activeService),
         findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockImplementation(({ data }) => ({ id: SERVICE_ID, ...data })),
-        update: jest.fn().mockImplementation(({ data }) => ({ id: SERVICE_ID, ...data })),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }) => ({ id: SERVICE_ID, ...data })),
+        update: jest
+          .fn()
+          .mockImplementation(({ data }) => ({ id: SERVICE_ID, ...data })),
       },
       systemModule: {
         findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({ id: MODULE_ID, code: 'INVENTARIO' }),
+        create: jest
+          .fn()
+          .mockResolvedValue({ id: MODULE_ID, code: 'INVENTARIO' }),
       },
       role: { findMany: jest.fn().mockResolvedValue([{ id: ROLE_ID }]) },
       menu: {
-        create: jest
-          .fn()
-          .mockImplementation(({ data }) => ({ id: `menu-${data.name}`, ...data })),
+        create: jest.fn().mockImplementation(({ data }) => ({
+          id: `menu-${data.name}`,
+          ...data,
+        })),
       },
       roleModule: { create: jest.fn().mockResolvedValue({}) },
       roleMenu: { create: jest.fn().mockResolvedValue({}) },
+      externalServiceRoute: { create: jest.fn().mockResolvedValue({}) },
       // La transaccion se ejecuta con el mismo mock de prisma.
-      $transaction: jest.fn().mockImplementation((callback) => callback(prisma)),
+      $transaction: jest
+        .fn()
+        .mockImplementation((callback) => callback(prisma)),
     };
 
     fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
 
     service = new ExternalServicesService(prisma as unknown as PrismaService);
   });
@@ -132,13 +147,18 @@ describe('ExternalServicesService', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          text: async () =>
-            JSON.stringify({
-              paths: {
-                '/productos': { get: { summary: 'Listar productos' }, post: {} },
-                '/stock': { get: { operationId: 'getStock' } },
-              },
-            }),
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                paths: {
+                  '/productos': {
+                    get: { summary: 'Listar productos' },
+                    post: {},
+                  },
+                  '/stock': { get: { operationId: 'getStock' } },
+                },
+              }),
+            ),
         });
 
       const result = await service.probe({
@@ -155,7 +175,11 @@ describe('ExternalServicesService', () => {
     it('un OpenAPI invalido no invalida el probe de salud', async () => {
       fetchMock
         .mockResolvedValueOnce({ ok: true, status: 200 })
-        .mockResolvedValueOnce({ ok: true, status: 200, text: async () => 'no-es-json' });
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve('no-es-json'),
+        });
 
       const result = await service.probe({
         baseUrl: 'http://127.0.0.1:3006',
@@ -174,7 +198,11 @@ describe('ExternalServicesService', () => {
 
       await expect(
         service.create(
-          { code: 'INVENTARIO', name: 'Inventario', baseUrl: 'http://127.0.0.1:9999' },
+          {
+            code: 'INVENTARIO',
+            name: 'Inventario',
+            baseUrl: 'http://127.0.0.1:9999',
+          },
           ACTOR_ID,
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -186,7 +214,11 @@ describe('ExternalServicesService', () => {
 
       await expect(
         service.create(
-          { code: 'INVENTARIO', name: 'Inventario', baseUrl: 'http://127.0.0.1:3006' },
+          {
+            code: 'INVENTARIO',
+            name: 'Inventario',
+            baseUrl: 'http://127.0.0.1:3006',
+          },
           ACTOR_ID,
         ),
       ).rejects.toBeInstanceOf(ConflictException);
@@ -196,11 +228,19 @@ describe('ExternalServicesService', () => {
       fetchMock.mockResolvedValue({ ok: true, status: 200 });
 
       const created = await service.create(
-        { code: 'INVENTARIO', name: 'Inventario', baseUrl: 'http://127.0.0.1:3006' },
+        {
+          code: 'INVENTARIO',
+          name: 'Inventario',
+          baseUrl: 'http://127.0.0.1:3006',
+        },
         ACTOR_ID,
       );
 
-      expect(created).toMatchObject({ code: 'INVENTARIO', lastProbeOk: true, createdBy: ACTOR_ID });
+      expect(created).toMatchObject({
+        code: 'INVENTARIO',
+        lastProbeOk: true,
+        createdBy: ACTOR_ID,
+      });
     });
   });
 
@@ -229,7 +269,18 @@ describe('ExternalServicesService', () => {
         expect(call[0].data.parentId).toBeDefined();
       }
 
+      expect(prisma.externalServiceRoute.create).toHaveBeenCalledTimes(2);
+      expect(prisma.externalServiceRoute.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            publicPath: '/inventario/productos',
+            targetPath: '/productos',
+            methods: ['GET'],
+          }),
+        }),
+      );
       expect(result.menus).toBe(3);
+      expect(result.routes).toBe(2);
     });
 
     it('asigna modulo y todos los menus a cada rol indicado', async () => {
@@ -250,33 +301,35 @@ describe('ExternalServicesService', () => {
         moduleId: MODULE_ID,
       });
 
-      await expect(service.provision(SERVICE_ID, dto, ACTOR_ID)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.provision(SERVICE_ID, dto, ACTOR_ID),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('rechaza roles inexistentes o inactivos', async () => {
       prisma.role.findMany.mockResolvedValue([]);
 
-      await expect(service.provision(SERVICE_ID, dto, ACTOR_ID)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.provision(SERVICE_ID, dto, ACTOR_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('rechaza si ya existe un modulo con ese codigo', async () => {
       prisma.systemModule.findUnique.mockResolvedValue({ id: MODULE_ID });
 
-      await expect(service.provision(SERVICE_ID, dto, ACTOR_ID)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.provision(SERVICE_ID, dto, ACTOR_ID),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 
   it('findOne lanza NotFound cuando el servicio no existe o esta inactivo', async () => {
     prisma.externalService.findFirst.mockResolvedValue(null);
 
-    await expect(service.findOne(SERVICE_ID)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.findOne(SERVICE_ID)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('remove hace soft delete, no borrado fisico', async () => {

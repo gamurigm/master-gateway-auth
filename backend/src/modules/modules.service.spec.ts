@@ -4,11 +4,13 @@ import { ModulesService } from './modules.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const MODULE_ID = '11111111-1111-1111-1111-111111111111';
+const MENU_ID = '33333333-3333-3333-3333-333333333333';
 const ACTOR_ID = '22222222-2222-2222-2222-222222222222';
 
 describe('ModulesService', () => {
   let service: ModulesService;
   let prisma: {
+    $transaction: jest.Mock;
     systemModule: {
       findMany: jest.Mock;
       findFirst: jest.Mock;
@@ -16,6 +18,10 @@ describe('ModulesService', () => {
       create: jest.Mock;
       update: jest.Mock;
     };
+    menu: { findMany: jest.Mock; updateMany: jest.Mock };
+    roleMenu: { updateMany: jest.Mock };
+    roleModule: { updateMany: jest.Mock };
+    externalServiceRoute: { updateMany: jest.Mock };
   };
 
   const activeModule = () => ({
@@ -32,6 +38,9 @@ describe('ModulesService', () => {
 
   beforeEach(() => {
     prisma = {
+      $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
+        callback(prisma),
+      ),
       systemModule: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
@@ -39,6 +48,10 @@ describe('ModulesService', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
+      menu: { findMany: jest.fn(), updateMany: jest.fn() },
+      roleMenu: { updateMany: jest.fn() },
+      roleModule: { updateMany: jest.fn() },
+      externalServiceRoute: { updateMany: jest.fn() },
     };
     jest.clearAllMocks();
     service = new ModulesService(prisma as unknown as PrismaService);
@@ -122,12 +135,31 @@ describe('ModulesService', () => {
   });
 
   describe('remove', () => {
-    it('soft-deletes the module', async () => {
+    it('soft-deletes the module and its navigation assignments', async () => {
       prisma.systemModule.findFirst.mockResolvedValue(activeModule());
+      prisma.menu.findMany.mockResolvedValue([{ id: MENU_ID }]);
 
       const result = await service.remove(MODULE_ID, ACTOR_ID);
 
       expect(result).toEqual({ success: true });
+      expect(prisma.roleMenu.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { menuId: { in: [MENU_ID] }, estado: Estado.ACTIVO },
+          data: expect.objectContaining({ estado: Estado.INACTIVO }),
+        }),
+      );
+      expect(prisma.menu.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { moduleId: MODULE_ID, estado: Estado.ACTIVO },
+          data: expect.objectContaining({ estado: Estado.INACTIVO }),
+        }),
+      );
+      expect(prisma.roleModule.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { moduleId: MODULE_ID, estado: Estado.ACTIVO },
+          data: expect.objectContaining({ estado: Estado.INACTIVO }),
+        }),
+      );
       expect(prisma.systemModule.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: MODULE_ID },

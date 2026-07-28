@@ -5,7 +5,11 @@
       :to="node.url"
       class="menu-link"
     >
-      <AppIcon v-if="node.icon" :name="node.icon" size="16" />
+      <AppIcon
+        v-if="node.icon"
+        :name="node.icon"
+        size="16"
+      />
       <span>{{ node.name }}</span>
     </router-link>
     <a
@@ -15,15 +19,33 @@
       rel="noopener noreferrer"
       class="menu-link"
     >
-      <AppIcon v-if="node.icon" :name="node.icon" size="16" />
+      <AppIcon
+        v-if="node.icon"
+        :name="node.icon"
+        size="16"
+      />
       <span>{{ node.name }}</span>
     </a>
-    <span v-else class="menu-group">
-      <AppIcon v-if="node.icon" :name="node.icon" size="16" />
+    <span
+      v-else
+      class="menu-group"
+    >
+      <AppIcon
+        v-if="node.icon"
+        :name="node.icon"
+        size="16"
+      />
       <span>{{ node.name }}</span>
     </span>
-    <ul v-if="node.children.length" class="child-menu">
-      <MenuItem v-for="child in node.children" :key="child.id" :node="child" />
+    <ul
+      v-if="node.children.length"
+      class="child-menu"
+    >
+      <MenuItem
+        v-for="child in node.children"
+        :key="child.id"
+        :node="child"
+      />
     </ul>
   </li>
 </template>

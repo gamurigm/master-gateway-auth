@@ -33,6 +33,11 @@ export class AuthController {
     };
   }
 
+  @Get('.well-known/jwks.json')
+  async getJwks() {
+    return this.keysService.getJwks();
+  }
+
   @Throttle({ default: { limit: 5, ttl: 60_000, blockDuration: 300_000 } })
   @Post('auth/login')
   login(@Body() dto: LoginDto) {

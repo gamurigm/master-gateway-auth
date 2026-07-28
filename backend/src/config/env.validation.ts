@@ -12,15 +12,11 @@ const DEVELOPMENT_DEFAULTS: Record<string, string> = {
   JWT_PUBLIC_KEY_PATH: './keys/public.pem',
   // sast-ignore: SECRET-PLACEHOLDER centinela rechazado en produccion (ver validateEnv, linea 43)
   INTERNAL_API_KEY: 'change-me-internal-key',
-  INTERNAL_ALLOWED_SERVICES: 'ventas',
+  INTERNAL_ALLOWED_SERVICES: '',
+  OPA_URL: '',
 };
 
-const REQUIRED_KEYS = [
-  'DATABASE_URL',
-  'INTERNAL_API_KEY',
-  'INTERNAL_ALLOWED_SERVICES',
-
-] as const;
+const REQUIRED_KEYS = ['DATABASE_URL', 'INTERNAL_API_KEY'] as const;
 
 export function validateEnv(config: Record<string, unknown>) {
   const nodeEnv =
@@ -42,7 +38,6 @@ export function validateEnv(config: Record<string, unknown>) {
       throw new Error(`Unsafe default secret configured in production: ${key}`);
     }
   }
-
 
   return next;
 }

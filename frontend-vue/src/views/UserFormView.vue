@@ -3,31 +3,67 @@
     <div class="admin-header">
       <span class="eyebrow">Identidad</span>
       <h1>{{ isEdit ? 'Editar usuario' : 'Nuevo usuario' }}</h1>
-      <router-link to="/app/users" class="secondary-button">Volver</router-link>
+      <router-link
+        to="/app/users"
+        class="secondary-button"
+      >
+        Volver
+      </router-link>
     </div>
     <div class="admin-card">
       <form @submit.prevent="saveUser">
         <div class="field">
           <label>Email</label>
-          <input v-model="form.email" type="email" required />
+          <input
+            v-model="form.email"
+            type="email"
+            required
+          >
         </div>
         <div class="field">
           <label>Contrasena {{ isEdit ? '(dejar vacio para mantener)' : '' }}</label>
           <div class="password-wrapper">
-            <input v-model="form.password" :type="showPass ? 'text' : 'password'" :required="!isEdit" />
-            <button type="button" class="toggle-pass" @click="showPass = !showPass"><AppIcon :name="showPass ? 'EyeOff' : 'Eye'" size="18" /></button>
+            <input
+              v-model="form.password"
+              :type="showPass ? 'text' : 'password'"
+              :required="!isEdit"
+            >
+            <button
+              type="button"
+              class="toggle-pass"
+              @click="showPass = !showPass"
+            >
+              <AppIcon
+                :name="showPass ? 'EyeOff' : 'Eye'"
+                size="18"
+              />
+            </button>
           </div>
         </div>
         <div class="field">
           <label>Nombres</label>
-          <input v-model="form.firstName" required />
+          <input
+            v-model="form.firstName"
+            required
+          >
         </div>
         <div class="field">
           <label>Apellidos</label>
-          <input v-model="form.lastName" />
+          <input v-model="form.lastName">
         </div>
-        <p v-if="error" class="error">{{ error }}</p>
-        <button type="submit" class="primary-button" :disabled="saving">{{ saving ? 'Guardando...' : 'Guardar' }}</button>
+        <p
+          v-if="error"
+          class="error"
+        >
+          {{ error }}
+        </p>
+        <button
+          type="submit"
+          class="primary-button"
+          :disabled="saving"
+        >
+          {{ saving ? 'Guardando...' : 'Guardar' }}
+        </button>
       </form>
     </div>
   </div>

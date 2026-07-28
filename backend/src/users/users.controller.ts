@@ -57,6 +57,6 @@ export class UsersController {
     @Param('id', UUIDv4) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.usersService.remove(id, user.sub);
+    return this.usersService.remove(id, user.sub, user.roleName);
   }
 }

@@ -3,7 +3,10 @@
     <div class="admin-header">
       <span class="eyebrow">Ecosistema</span>
       <h1>Servicios externos</h1>
-      <router-link class="primary-button" to="/app/external-services/new">
+      <router-link
+        class="primary-button"
+        to="/app/external-services/new"
+      >
         + Registrar servicio
       </router-link>
     </div>
@@ -14,44 +17,88 @@
     </p>
 
     <template v-if="loading">
-      <div class="list-state"><div class="state-spinner" /> Cargando...</div>
+      <div class="list-state">
+        <div class="state-spinner" /> Cargando...
+      </div>
     </template>
     <template v-else-if="error">
-      <div class="error-state"><p>{{ error }}</p><button class="secondary-button" @click="load">Reintentar</button></div>
+      <div class="error-state">
+        <p>{{ error }}</p><button
+          class="secondary-button"
+          @click="load"
+        >
+          Reintentar
+        </button>
+      </div>
     </template>
     <template v-else-if="services.length === 0">
       <div class="empty-state">
-        <AppIcon name="plug" size="24" />
+        <AppIcon
+          name="plug"
+          size="24"
+        />
         <p>No hay servicios externos registrados</p>
-        <router-link class="primary-button" to="/app/external-services/new">+ Registrar el primero</router-link>
+        <router-link
+          class="primary-button"
+          to="/app/external-services/new"
+        >
+          + Registrar el primero
+        </router-link>
       </div>
     </template>
-    <table v-else class="crud-table">
+    <table
+      v-else
+      class="crud-table"
+    >
       <thead>
         <tr><th>Código</th><th>Nombre</th><th>URL base</th><th>Estado</th><th>Aprovisionado</th><th>Última verificación</th><th>Acciones</th></tr>
       </thead>
       <tbody>
-        <tr v-for="s in services" :key="s.id">
+        <tr
+          v-for="s in services"
+          :key="s.id"
+        >
           <td><code>{{ s.code }}</code></td>
           <td>{{ s.name }}</td>
           <td><code class="url-cell">{{ s.baseUrl }}</code></td>
           <td>
-            <span class="badge" :class="probeBadge(s)">
+            <span
+              class="badge"
+              :class="probeBadge(s)"
+            >
               {{ s.lastProbeOk === null || s.lastProbeOk === undefined ? 'sin probar' : s.lastProbeOk ? 'en línea' : 'caído' }}
             </span>
           </td>
           <td>
-            <span class="badge" :class="s.moduleId ? 'badge-active' : 'badge-inactive'">
+            <span
+              class="badge"
+              :class="s.moduleId ? 'badge-active' : 'badge-inactive'"
+            >
               {{ s.moduleId ? 'sí' : 'pendiente' }}
             </span>
           </td>
           <td>{{ s.lastProbeMs != null ? `${s.lastProbeMs} ms` : '—' }}</td>
           <td class="actions-cell">
-            <button class="icon-btn" title="Re-verificar" :disabled="probingId === s.id" @click="reprobe(s)">
-              <AppIcon name="activity" size="16" />
+            <button
+              class="icon-btn"
+              title="Re-verificar"
+              :disabled="probingId === s.id"
+              @click="reprobe(s)"
+            >
+              <AppIcon
+                name="activity"
+                size="16"
+              />
             </button>
-            <button class="icon-btn delete" title="Eliminar" @click="handleDelete(s)">
-              <AppIcon name="trash-2" size="16" />
+            <button
+              class="icon-btn delete"
+              title="Eliminar"
+              @click="handleDelete(s)"
+            >
+              <AppIcon
+                name="trash-2"
+                size="16"
+              />
             </button>
           </td>
         </tr>

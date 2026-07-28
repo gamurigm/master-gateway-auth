@@ -2,11 +2,17 @@
   <main class="auth-page">
     <div class="auth-panel">
       <div class="auth-header">
-        <AppIcon name="users" size="40" />
+        <AppIcon
+          name="users"
+          size="40"
+        />
         <h1>Seleccionar Rol</h1>
         <p>Elija el rol con el que desea trabajar</p>
       </div>
-      <div v-if="roles.length" class="role-list">
+      <div
+        v-if="roles.length"
+        class="role-list"
+      >
         <button
           v-for="role in roles"
           :key="role.id"
@@ -14,11 +20,19 @@
           :disabled="selecting"
           @click="selectRole(role.id)"
         >
-          <AppIcon name="user-check" size="20" />
+          <AppIcon
+            name="user-check"
+            size="20"
+          />
           <span>{{ role.name }}</span>
         </button>
       </div>
-      <p v-else class="error">No tiene roles asignados</p>
+      <p
+        v-else
+        class="error"
+      >
+        No tiene roles asignados
+      </p>
     </div>
   </main>
 </template>

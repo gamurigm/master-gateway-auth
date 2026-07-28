@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { Estado } from '@prisma/client';
 import { MenusService } from './menus.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -13,8 +14,15 @@ describe('MenusService', () => {
   let service: MenusService;
 
   const prisma = {
+    $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
+      callback(prisma),
+    ),
     roleMenu: {
       findMany: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    externalServiceRoute: {
+      updateMany: jest.fn(),
     },
     systemModule: {
       findFirst: jest.fn(),
@@ -22,6 +30,8 @@ describe('MenusService', () => {
     menu: {
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
+      findMany: jest.fn(),
       findFirst: jest.fn(),
       findUnique: jest.fn(),
     },
@@ -119,6 +129,39 @@ describe('MenusService', () => {
     await expect(
       service.update(ROOT_MENU_ID, { parentId: CHILD_MENU_ID }, ACTOR_ID),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('soft-deletes a menu subtree and its assignments', async () => {
+    prisma.menu.findFirst.mockResolvedValue({
+      id: ROOT_MENU_ID,
+      moduleId: MODULE_ID,
+      estado: Estado.ACTIVO,
+    });
+    prisma.menu.findMany
+      .mockResolvedValueOnce([{ id: CHILD_MENU_ID }])
+      .mockResolvedValueOnce([]);
+
+    const result = await service.remove(ROOT_MENU_ID, ACTOR_ID);
+
+    expect(result).toEqual({ success: true });
+    expect(prisma.roleMenu.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          menuId: { in: [ROOT_MENU_ID, CHILD_MENU_ID] },
+          estado: Estado.ACTIVO,
+        },
+        data: expect.objectContaining({ estado: Estado.INACTIVO }),
+      }),
+    );
+    expect(prisma.menu.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: { in: [ROOT_MENU_ID, CHILD_MENU_ID] },
+          estado: Estado.ACTIVO,
+        },
+        data: expect.objectContaining({ estado: Estado.INACTIVO }),
+      }),
+    );
   });
 
   const menuRecord = (

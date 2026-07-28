@@ -14,7 +14,6 @@ const ROLE_ID = '22222222-2222-2222-2222-222222222222';
 const EMAIL = 'admin@example.com';
 const PASSWORD = 'Admin12345!';
 
-
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
   publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -25,7 +24,6 @@ const keysService = {
   getPrivateKey: () => privateKey,
   getPublicKey: () => publicKey,
 };
-
 
 const jwtOptions = {
   privateKey,
@@ -314,5 +312,4 @@ describe('AuthService', () => {
       .setIssuer('master-gateway')
       .setAudience('master-gateway-clients')
       .encrypt(await importSPKI(publicKey, 'RSA-OAEP-256'));
-
 });

@@ -55,9 +55,36 @@ export class ModulesService {
 
   async remove(id: string, actorId: string) {
     await this.ensureActive(id);
-    await this.prisma.systemModule.update({
-      where: { id },
-      data: { estado: Estado.INACTIVO, updatedBy: actorId },
+    await this.prisma.$transaction(async (tx) => {
+      const menus = await tx.menu.findMany({
+        where: { moduleId: id, estado: Estado.ACTIVO },
+        select: { id: true },
+      });
+      const menuIds = menus.map((menu) => menu.id);
+
+      if (menuIds.length > 0) {
+        await tx.roleMenu.updateMany({
+          where: { menuId: { in: menuIds }, estado: Estado.ACTIVO },
+          data: { estado: Estado.INACTIVO, updatedBy: actorId },
+        });
+        await tx.externalServiceRoute.updateMany({
+          where: { menuId: { in: menuIds }, estado: Estado.ACTIVO },
+          data: { estado: Estado.INACTIVO, updatedBy: actorId },
+        });
+      }
+
+      await tx.menu.updateMany({
+        where: { moduleId: id, estado: Estado.ACTIVO },
+        data: { estado: Estado.INACTIVO, updatedBy: actorId },
+      });
+      await tx.roleModule.updateMany({
+        where: { moduleId: id, estado: Estado.ACTIVO },
+        data: { estado: Estado.INACTIVO, updatedBy: actorId },
+      });
+      await tx.systemModule.update({
+        where: { id },
+        data: { estado: Estado.INACTIVO, updatedBy: actorId },
+      });
     });
 
     return { success: true };

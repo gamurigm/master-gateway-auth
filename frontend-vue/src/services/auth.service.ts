@@ -1,5 +1,5 @@
 import api from './api'
-import type { LoginResponse, SessionResponse } from '../types'
+import type { AuthUserSummary, LoginResponse, SessionResponse } from '../types'
 
 export const authService = {
   async login(email: string, password: string) {
@@ -12,12 +12,15 @@ export const authService = {
 
   async selectRole(roleId: string) {
     const tempToken = sessionStorage.getItem('tempToken')
+    const loginUser = sessionStorage.getItem('loginUser')
     const { data } = await api.post<SessionResponse>('/auth/select-role', { tempToken, roleId })
     localStorage.setItem('accessToken', data.accessToken)
     localStorage.setItem('refreshToken', data.refreshToken)
     localStorage.setItem('currentRole', JSON.stringify(data.role))
+    if (loginUser) localStorage.setItem('currentUser', loginUser)
     sessionStorage.removeItem('tempToken')
     sessionStorage.removeItem('roles')
+    sessionStorage.removeItem('loginUser')
     return data
   },
 
@@ -43,6 +46,7 @@ export const authService = {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('currentRole')
+    localStorage.removeItem('currentUser')
     sessionStorage.removeItem('tempToken')
     sessionStorage.removeItem('roles')
     sessionStorage.removeItem('loginUser')
@@ -52,14 +56,19 @@ export const authService = {
     return localStorage.getItem('accessToken')
   },
 
-  getRolesFromLogin() {
+  getRolesFromLogin(): SessionResponse['role'][] {
     const raw = sessionStorage.getItem('roles')
     return raw ? JSON.parse(raw) : []
   },
 
-  getCurrentRole() {
+  getCurrentRole(): SessionResponse['role'] | null {
     const raw = localStorage.getItem('currentRole')
-    return raw ? JSON.parse(raw) : null
+    return raw ? (JSON.parse(raw) as SessionResponse['role']) : null
+  },
+
+  getCurrentUser(): AuthUserSummary | null {
+    const raw = localStorage.getItem('currentUser')
+    return raw ? (JSON.parse(raw) as AuthUserSummary) : null
   },
 
   hasTempToken() {

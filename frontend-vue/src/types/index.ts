@@ -4,10 +4,17 @@ export interface RoleSummary {
   description?: string | null
 }
 
+export interface AuthUserSummary {
+  id: string
+  email: string
+  firstName: string
+  lastName?: string | null
+}
+
 export interface LoginResponse {
   tempToken: string
   roles: RoleSummary[]
-  user: { id: string; email: string; firstName: string; lastName?: string | null }
+  user: AuthUserSummary
 }
 
 export interface SessionResponse {
@@ -247,6 +254,8 @@ export interface CreateExternalServiceDto {
 export interface ProvisionMenuItem {
   name: string
   path: string
+  targetPath?: string
+  methods?: string[]
   icon?: string
 }
 

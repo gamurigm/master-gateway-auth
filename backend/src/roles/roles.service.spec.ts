@@ -1,6 +1,7 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { Estado } from '@prisma/client';
@@ -12,6 +13,8 @@ const USER_ID = '22222222-2222-2222-2222-222222222222';
 const MODULE_ID = '33333333-3333-3333-3333-333333333333';
 const MENU_ID = '44444444-4444-4444-4444-444444444444';
 const ACTOR_ID = '55555555-5555-5555-5555-555555555555';
+const ACTOR_ROLE_ID = '66666666-6666-4666-8666-666666666666';
+const PERMISSION_ID = '77777777-7777-4777-8777-777777777777';
 
 describe('RolesService', () => {
   let service: RolesService;
@@ -29,12 +32,36 @@ describe('RolesService', () => {
     menu: { findFirst: jest.Mock };
     roleModule: { upsert: jest.Mock; update: jest.Mock };
     roleMenu: { upsert: jest.Mock; update: jest.Mock };
+    permission: { findFirst: jest.Mock };
+    rolePermission: {
+      upsert: jest.Mock;
+      update: jest.Mock;
+      findFirst: jest.Mock;
+    };
   };
 
-  const activeRole = () => ({
-    id: ROLE_ID,
-    name: 'ADMIN',
+  const activeRole = (
+    overrides: Partial<{ id: string; name: string }> = {},
+  ) => ({
+    id: overrides.id ?? ROLE_ID,
+    name: overrides.name ?? 'ADMIN',
     description: 'Administrator',
+    estado: Estado.ACTIVO,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: null,
+    updatedBy: null,
+  });
+
+  const activePermission = (
+    overrides: Partial<{ id: string; code: string; delegable: boolean }> = {},
+  ) => ({
+    id: overrides.id ?? PERMISSION_ID,
+    code: overrides.code ?? 'users:read',
+    resource: 'users',
+    action: 'read',
+    description: 'Read users',
+    delegable: overrides.delegable ?? true,
     estado: Estado.ACTIVO,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -57,6 +84,12 @@ describe('RolesService', () => {
       menu: { findFirst: jest.fn() },
       roleModule: { upsert: jest.fn(), update: jest.fn() },
       roleMenu: { upsert: jest.fn(), update: jest.fn() },
+      permission: { findFirst: jest.fn() },
+      rolePermission: {
+        upsert: jest.fn(),
+        update: jest.fn(),
+        findFirst: jest.fn(),
+      },
     };
     jest.clearAllMocks();
     service = new RolesService(prisma as unknown as PrismaService);
@@ -102,6 +135,13 @@ describe('RolesService', () => {
       await expect(
         service.create({ name: 'ADMIN' }, ACTOR_ID),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('rejects non-super admins creating protected super admin roles', async () => {
+      await expect(
+        service.create({ name: 'SUPER_ADMIN' }, ACTOR_ID, 'ADMIN'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.role.create).not.toHaveBeenCalled();
     });
   });
 
@@ -158,8 +198,8 @@ describe('RolesService', () => {
   });
 
   describe('assignUser / unassignUser', () => {
-    it('assigns user to role with upsert', async () => {
-      prisma.role.findFirst.mockResolvedValue(activeRole());
+    it('assigns user to non-privileged role with upsert', async () => {
+      prisma.role.findFirst.mockResolvedValue(activeRole({ name: 'USER' }));
       prisma.user.findFirst.mockResolvedValue({
         id: USER_ID,
         estado: Estado.ACTIVO,
@@ -169,7 +209,7 @@ describe('RolesService', () => {
         roleId: ROLE_ID,
       });
 
-      await service.assignUser(ROLE_ID, USER_ID, ACTOR_ID);
+      await service.assignUser(ROLE_ID, USER_ID, ACTOR_ID, 'ADMIN');
 
       expect(prisma.userRole.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -183,14 +223,19 @@ describe('RolesService', () => {
       );
     });
 
-    it('unassigns user from role with soft delete', async () => {
-      prisma.role.findFirst.mockResolvedValue(activeRole());
+    it('unassigns user from non-privileged role with soft delete', async () => {
+      prisma.role.findFirst.mockResolvedValue(activeRole({ name: 'USER' }));
       prisma.user.findFirst.mockResolvedValue({
         id: USER_ID,
         estado: Estado.ACTIVO,
       });
 
-      const result = await service.unassignUser(ROLE_ID, USER_ID, ACTOR_ID);
+      const result = await service.unassignUser(
+        ROLE_ID,
+        USER_ID,
+        ACTOR_ID,
+        'ADMIN',
+      );
 
       expect(result).toEqual({ success: true });
       expect(prisma.userRole.update).toHaveBeenCalledWith(
@@ -199,6 +244,28 @@ describe('RolesService', () => {
           data: expect.objectContaining({ estado: Estado.INACTIVO }),
         }),
       );
+    });
+
+    it('rejects non-super admins assigning users to SUPER_ADMIN', async () => {
+      prisma.role.findFirst.mockResolvedValue(
+        activeRole({ id: ROLE_ID, name: 'SUPER_ADMIN' }),
+      );
+
+      await expect(
+        service.assignUser(ROLE_ID, USER_ID, ACTOR_ID, 'ADMIN'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.userRole.upsert).not.toHaveBeenCalled();
+    });
+
+    it('rejects non-super admins assigning users to ADMIN', async () => {
+      prisma.role.findFirst.mockResolvedValue(
+        activeRole({ id: ROLE_ID, name: 'ADMIN' }),
+      );
+
+      await expect(
+        service.assignUser(ROLE_ID, USER_ID, ACTOR_ID, 'ADMIN'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.userRole.upsert).not.toHaveBeenCalled();
     });
   });
 
@@ -239,6 +306,76 @@ describe('RolesService', () => {
           data: expect.objectContaining({ estado: Estado.INACTIVO }),
         }),
       );
+    });
+  });
+
+  describe('assignPermission / unassignPermission', () => {
+    it('rejects permission changes on the authenticated role', async () => {
+      prisma.role.findFirst.mockResolvedValue(activeRole({ id: ROLE_ID }));
+      prisma.permission.findFirst.mockResolvedValue(activePermission());
+
+      await expect(
+        service.assignPermission(
+          ROLE_ID,
+          PERMISSION_ID,
+          ACTOR_ID,
+          ROLE_ID,
+          'ADMIN',
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.rolePermission.upsert).not.toHaveBeenCalled();
+    });
+
+    it('allows SUPER_ADMIN to assign non-delegable permissions to another role', async () => {
+      prisma.role.findFirst.mockResolvedValue(activeRole({ id: ROLE_ID }));
+      prisma.permission.findFirst.mockResolvedValue(
+        activePermission({ code: 'permissions:delete', delegable: false }),
+      );
+      prisma.rolePermission.upsert.mockResolvedValue({
+        roleId: ROLE_ID,
+        permissionId: PERMISSION_ID,
+      });
+
+      await service.assignPermission(
+        ROLE_ID,
+        PERMISSION_ID,
+        ACTOR_ID,
+        ACTOR_ROLE_ID,
+        'SUPER_ADMIN',
+      );
+
+      expect(prisma.rolePermission.findFirst).not.toHaveBeenCalled();
+      expect(prisma.rolePermission.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            roleId_permissionId: {
+              roleId: ROLE_ID,
+              permissionId: PERMISSION_ID,
+            },
+          },
+        }),
+      );
+    });
+
+    it('rejects non-super admins assigning non-delegable permissions', async () => {
+      prisma.role.findFirst.mockResolvedValue(activeRole({ id: ROLE_ID }));
+      prisma.permission.findFirst.mockResolvedValue(
+        activePermission({ code: 'permissions:delete', delegable: false }),
+      );
+      prisma.rolePermission.findFirst.mockResolvedValue({
+        id: 'assignment-id',
+      });
+
+      await expect(
+        service.assignPermission(
+          ROLE_ID,
+          PERMISSION_ID,
+          ACTOR_ID,
+          ACTOR_ROLE_ID,
+          'ADMIN',
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.rolePermission.upsert).not.toHaveBeenCalled();
     });
   });
 

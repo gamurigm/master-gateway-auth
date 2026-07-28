@@ -87,3 +87,42 @@ export function clearMenuRoutes(): void {
 export function hasDynamicRoutes(): boolean {
   return registered.size > 0
 }
+
+/**
+ * Registra una ÚNICA ruta dinámica a partir de un nodo de menú.
+ * No duplica si la ruta ya existe.
+ */
+export function addDynamicRoute(router: Router, node: MenuNode): void {
+  const url = node.url ?? ''
+  if (!url.startsWith('/app/')) return
+
+  const routeName = `${DYNAMIC_ROUTE_PREFIX}${url}`
+
+  if (router.hasRoute(routeName) || router.getRoutes().some((r) => r.path === url)) {
+    return
+  }
+
+  const relativePath = url.replace(/^\/app\//, '')
+
+  const remove = router.addRoute(PARENT_ROUTE_NAME, {
+    path: relativePath,
+    name: routeName,
+    component: () => import('../views/DynamicPageView.vue'),
+    meta: { requiresAuth: true, menu: node },
+  })
+  registered.set(routeName, remove)
+}
+
+/**
+ * Elimina una ÚNICA ruta dinámica por su URL.
+ */
+export function removeDynamicRoute(url: string | null): void {
+  if (!url || !url.startsWith('/app/')) return
+
+  const routeName = `${DYNAMIC_ROUTE_PREFIX}${url}`
+  const remove = registered.get(routeName)
+  if (remove) {
+    remove()
+    registered.delete(routeName)
+  }
+}

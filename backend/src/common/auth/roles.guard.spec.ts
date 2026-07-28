@@ -34,6 +34,26 @@ describe('RolesGuard', () => {
     expect(guard.canActivate(createContext('ADMIN'))).toBe(true);
   });
 
+  it('allows SUPER_ADMIN on any protected admin route', () => {
+    const reflector = {
+      getAllAndOverride: jest.fn().mockReturnValue(['ADMIN']),
+    } as unknown as Reflector;
+    const guard = new RolesGuard(reflector);
+
+    expect(guard.canActivate(createContext('SUPER_ADMIN'))).toBe(true);
+  });
+
+  it('does not treat legacy SUPERADMIN as a Nest bypass role', () => {
+    const reflector = {
+      getAllAndOverride: jest.fn().mockReturnValue(['ADMIN']),
+    } as unknown as Reflector;
+    const guard = new RolesGuard(reflector);
+
+    expect(() => guard.canActivate(createContext('SUPERADMIN'))).toThrow(
+      ForbiddenException,
+    );
+  });
+
   it('rejects users without the required role', () => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(['ADMIN']),
