@@ -203,7 +203,6 @@ npm run sast:rules       # escaneo con reglas
 ```bash
 kubectl apply -k k8s/overlays/dev
 ```
-
 Guia completa en `k8s/README.md`.
 
 ## Documentacion
