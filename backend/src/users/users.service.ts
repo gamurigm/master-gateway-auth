@@ -12,7 +12,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
-const SUPER_ADMIN_ROLE = 'SUPER_ADMIN';
 const DEFAULT_USER_ROLE = 'USER';
 
 @Injectable()
@@ -128,21 +127,22 @@ export class UsersService {
     return omitPassword(user);
   }
 
-  async remove(id: string, actorId: string, actorRoleName = '') {
+  /**
+   * Eliminacion LOGICA del usuario (soft delete).
+   *
+   * El enunciado (§9, "Estandar de Campos Obligatorios") es explicito:
+   * "Nunca se debe eliminar fisicamente un registro (DELETE duro), se debe
+   * hacer un Soft Delete actualizando este campo a INACTIVO". La rama que
+   * borraba fisicamente cuando el actor era SUPER_ADMIN incumplia ese
+   * requisito y ademas destruia la trazabilidad de auditoria (quien creo o
+   * modifico que) y las referencias `creado_por` / `actualizado_por` de otras
+   * filas. El rol del actor ya no cambia el tipo de borrado.
+   */
+  async remove(id: string, actorId: string) {
     await this.ensureActive(id);
 
     if (id === actorId) {
       throw new ForbiddenException('No puedes eliminar tu propio usuario');
-    }
-
-    if (actorRoleName === SUPER_ADMIN_ROLE) {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.refreshToken.deleteMany({ where: { userId: id } });
-        await tx.userRole.deleteMany({ where: { userId: id } });
-        await tx.user.delete({ where: { id } });
-      });
-
-      return { success: true };
     }
 
     const revokedAt = new Date();

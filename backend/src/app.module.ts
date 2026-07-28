@@ -29,9 +29,13 @@ import { UsersModule } from './users/users.module';
       },
     ]),
     ServeStaticModule.forRoot({
+      // `frontend/` era el Angular legado, ya retirado (solo queda su
+      // node_modules). La SPA real es `frontend-vue`, asi que el backend estaba
+      // sirviendo estaticos desde un directorio inexistente.
+      // __dirname = backend/dist/src -> tres niveles arriba es la raiz del repo.
       rootPath:
         process.env.FRONTEND_DIST_PATH ??
-        join(__dirname, '..', '..', '..', 'frontend', 'dist'),
+        join(__dirname, '..', '..', '..', 'frontend-vue', 'dist'),
       // Sintaxis de path-to-regexp v8 (Express 5): los grupos regex sin nombre
       // como `(.*)` ya no son vÃ¡lidos y lanzan PathError. `{/*splat}` es el
       // wildcard con nombre equivalente, que matchea el prefijo y todo lo que

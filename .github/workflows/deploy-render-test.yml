@@ -1,13 +1,25 @@
 name: Deploy Render Test
 
+# SOLO disparo manual.
+#
+# Antes reaccionaba a `push` sobre `deploy/render-test` y ejecutaba
+# `render deploys create` contra el servicio REAL sin build, sin tests, sin
+# SonarQube y sin el SAST. Es decir: un atajo que evitaba entero el Shift-Left
+# del anexo, pese a llamarse "test". Con `workflow_dispatch` sigue disponible
+# para un despliegue de emergencia, pero exige una accion humana deliberada y
+# ya no se dispara solo por empujar codigo.
 on:
-  push:
-    branches:
-      - deploy/render-test
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: 'Motivo del despliegue manual sin gates'
+        required: true
+
+permissions:
+  contents: read
 
 jobs:
   deploy-only:
-    if: github.ref == 'refs/heads/deploy/render-test'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
