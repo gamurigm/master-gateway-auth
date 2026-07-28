@@ -1055,11 +1055,14 @@ jobs:
 
       - name: Install Render CLI
         run: |
-          archive=cli_2.19.0_linux_amd64.zip
-          curl -fsSLO "https://github.com/render-oss/cli/releases/download/v2.19.0/$archive"
+          version=2.22.0
+          archive="cli_${version}_linux_amd64.zip"
+          checksum=6cdcd11897b7bd7e673317e6f4aaf041b654d818444f3b1efec7240a835f79ec
+          curl -fsSLO "https://github.com/render-oss/cli/releases/download/v${version}/$archive"
+          echo "$checksum  $archive" | sha256sum --check -
           unzip -oq "$archive"
           mkdir -p "$HOME/.local/bin"
-          install -m 0755 cli_v2.19.0 "$HOME/.local/bin/render"
+          install -m 0755 "cli_v${version}" "$HOME/.local/bin/render"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Configure Render backend service
@@ -1096,6 +1099,27 @@ jobs:
             --confirm \
             --wait \
             --commit "$GITHUB_SHA"
+
+      - name: Diagnose Render deploy failure
+        if: failure()
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          set +e
+          echo "::group::Render deploy details"
+          render deploys list "$RENDER_SERVICE_ID" --output json \
+            | jq '.[0].deploy | {id, status, errorMessage, createdAt, finishedAt, commit}'
+          echo "::endgroup::"
+
+          echo "::group::Render recent service logs"
+          render logs \
+            --resources "$RENDER_SERVICE_ID" \
+            --start "$(date -u -d '20 minutes ago' +'%Y-%m-%dT%H:%M:%SZ')" \
+            --direction backward \
+            --limit 200 \
+            --output json
+          echo "::endgroup::"
 
       - name: Notify deploy result
         if: always()

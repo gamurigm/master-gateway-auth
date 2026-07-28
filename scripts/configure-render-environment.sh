@@ -5,6 +5,10 @@ set -euo pipefail
 required=(
   RENDER_API_KEY
   RENDER_SERVICE_ID
+  JWE_SECRET
+  JWT_SECRET
+  TEMP_JWT_SECRET
+  REFRESH_JWT_SECRET
   INTERNAL_API_KEY
   FRONTEND_ORIGIN
   SEED_ADMIN_PASSWORD
@@ -56,6 +60,10 @@ put_env NODE_ENV production
 put_env JWT_ISSUER master-gateway
 put_env JWT_AUDIENCE master-gateway-clients
 put_env FRONTEND_ORIGIN "$FRONTEND_ORIGIN"
+put_env JWE_SECRET "$JWE_SECRET"
+put_env JWT_SECRET "$JWT_SECRET"
+put_env TEMP_JWT_SECRET "$TEMP_JWT_SECRET"
+put_env REFRESH_JWT_SECRET "$REFRESH_JWT_SECRET"
 put_env JWT_PRIVATE_KEY_PATH ./keys/private.pem
 put_env JWT_PUBLIC_KEY_PATH ./keys/public.pem
 put_env INTERNAL_ALLOWED_SERVICES ventas
