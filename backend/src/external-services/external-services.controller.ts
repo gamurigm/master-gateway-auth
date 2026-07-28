@@ -86,6 +86,23 @@ export class ExternalServicesController {
     return this.externalServicesService.provision(id, dto, user.sub);
   }
 
+  /**
+   * Genera una credencial de servicio nueva y la devuelve UNA sola vez.
+   *
+   * No hay endpoint para leerla: a partir de aqui solo se puede saber si
+   * existe (`hasApiKey`). Throttle estricto porque cada llamada invalida la
+   * clave anterior y dejaria al microservicio rechazando al Gateway.
+   */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post(':id/rotate-api-key')
+  @HttpCode(HttpStatus.OK)
+  rotateApiKey(
+    @Param('id', UUIDv4) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.externalServicesService.rotateApiKey(id, user.sub);
+  }
+
   @Put(':id')
   update(
     @Param('id', UUIDv4) id: string,

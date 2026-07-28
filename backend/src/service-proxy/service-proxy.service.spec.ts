@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Estado } from '@prisma/client';
 import { ServiceProxyService } from './service-proxy.service';
+import { ServiceIdentityService } from '../external-services/service-identity.service';
 import type { RequestWithUser } from '../common/auth/request-with-user';
 import type { PrismaService } from '../prisma/prisma.service';
 
@@ -14,7 +15,10 @@ const route = {
   estado: Estado.ACTIVO,
   service: {
     id: 'service-id',
+    code: 'inventario',
     baseUrl: 'http://127.0.0.1:3001',
+    authenticationType: 'API_KEY',
+    apiKey: 'clave-de-servicio',
     estado: Estado.ACTIVO,
   },
   menu: {
@@ -68,6 +72,7 @@ describe('ServiceProxyService', () => {
     service = new ServiceProxyService(
       prisma as unknown as PrismaService,
       new ConfigService(),
+      new ServiceIdentityService(),
     );
   });
 
@@ -95,5 +100,63 @@ describe('ServiceProxyService', () => {
       ForbiddenException,
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // Identidad de servicio (ADR-3): el micro debe poder distinguir al Gateway
+  // legitimo de un impostor en la misma red Docker.
+  it('inyecta la identidad de servicio del microservicio destino', async () => {
+    await service.forward(createRequest());
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get('x-api-key')).toBe('clave-de-servicio');
+    expect(headers.get('x-gateway-service')).toBe('master-gateway');
+  });
+
+  it('no inyecta identidad de servicio si el micro no tiene clave', async () => {
+    prisma.externalServiceRoute.findMany.mockResolvedValue([
+      { ...route, service: { ...route.service, apiKey: null } },
+    ]);
+
+    await service.forward(createRequest());
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get('x-api-key')).toBeNull();
+    // Las cabeceras de identidad de USUARIO se siguen enviando.
+    expect(headers.get('x-gateway-user-id')).toBe('user-id');
+  });
+
+  // Sin esto, cualquier usuario autenticado podria suplantar a otro usuario o
+  // falsificar la identidad del Gateway: el micro confia en esas cabeceras
+  // precisamente porque asume que solo el Gateway las emite.
+  it('descarta las cabeceras de identidad que llegan del cliente', async () => {
+    const request = createRequest();
+    Object.assign(request.headers, {
+      'x-gateway-user-id': 'usuario-suplantado',
+      'x-gateway-role-name': 'SUPER_ADMIN',
+      'x-api-key': 'clave-falsificada',
+      'x-gateway-service': 'impostor',
+    });
+
+    await service.forward(request);
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get('x-gateway-user-id')).toBe('user-id');
+    expect(headers.get('x-api-key')).toBe('clave-de-servicio');
+    expect(headers.get('x-gateway-service')).toBe('master-gateway');
+  });
+
+  it('propaga los permisos del rol al microservicio', async () => {
+    const request = createRequest();
+    (request.user as { permissions?: string[] }).permissions = [
+      'inventario:read',
+      'inventario:write',
+    ];
+
+    await service.forward(request);
+
+    const headers = fetchMock.mock.calls[0][1].headers as Headers;
+    expect(headers.get('x-gateway-permissions')).toBe(
+      'inventario:read,inventario:write',
+    );
   });
 });
