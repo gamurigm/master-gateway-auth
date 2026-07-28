@@ -96,7 +96,7 @@ Cobertura **alta**. Resumen (detalle completo en `scratchpad/cumplimiento-pdf.md
 ### 🔴 C-1 · Bypass total de autenticación y autorización (forjado de tokens)
 **OWASP A02 Cryptographic Failures / A01 Broken Access Control · CWE-347 · Verificado con PoC funcional.**
 
-Los access/refresh tokens se emiten como **JWE cifrado** con `alg: RSA-OAEP-256` usando la clave **pública** RSA ([auth.service.ts:354-376](backend/src/auth/auth.service.ts)), y esa clave se sirve **sin protección** en `GET /api/auth/public-key` ([auth.controller.ts:28-34](backend/src/auth/auth.controller.ts)). En RSA-OAEP **la clave que cifra es la pública** → cualquiera que la descargue puede fabricar un token válido.
+Los access/refresh tokens se emiten como **JWE cifrado** con `alg: RSA-OAEP-256` usando la clave **pública** RSA ([auth.service.ts:354-376](../../backend/src/auth/auth.service.ts)), y esa clave se sirve **sin protección** en `GET /api/auth/public-key` ([auth.controller.ts:28-34](../../backend/src/auth/auth.controller.ts)). En RSA-OAEP **la clave que cifra es la pública** → cualquiera que la descargue puede fabricar un token válido.
 
 - Cifrar ≠ firmar. Un JWE da *confidencialidad*, no *autenticidad del emisor*. Para autenticar hace falta una **firma** (JWS con la clave privada), no cifrado con la pública.
 - **PoC confirmado**: con solo la clave pública del repo forjé un token con `roleName:"ADMIN"` y `decryptGatewayToken()` (lo que usa `JwtAuthGuard`) lo aceptó. `RolesGuard` entonces concede acceso total al CRUD.
@@ -127,33 +127,33 @@ En cualquier caso: **quitar o no exponer** `GET /api/auth/public-key` mientras e
 ---
 
 ### 🟠 A-1 · SSRF por TOCTOU / DNS rebinding en el probe
-**CWE-918 · Verificado en código.** [external-services.service.ts:74-78](backend/src/external-services/external-services.service.ts)
-`assertSafeProbeTarget()` valida la **IP resuelta**, pero luego `fetch(target)` usa el **hostname** ([:339](backend/src/external-services/external-services.service.ts)) → **segunda resolución DNS**. Un dominio con TTL 0 devuelve IP pública al validar y `169.254.169.254`/IP interna al conectar. El guard bloquea redirecciones pero no la doble resolución.
+**CWE-918 · Verificado en código.** [external-services.service.ts:74-78](../../backend/src/external-services/external-services.service.ts)
+`assertSafeProbeTarget()` valida la **IP resuelta**, pero luego `fetch(target)` usa el **hostname** ([:339](../../backend/src/external-services/external-services.service.ts)) → **segunda resolución DNS**. Un dominio con TTL 0 devuelve IP pública al validar y `169.254.169.254`/IP interna al conectar. El guard bloquea redirecciones pero no la doble resolución.
 **Fix:** resolver una vez y **fijar la conexión a esa IP** (lookup/agent custom con la IP ya validada y `Host` original).
 
 ### 🟠 A-2 · XSS almacenado vía `:href` de menú (+ A-3) → toma de cuenta
-**OWASP A03 · CWE-79 · Verificado.** [MenuItem.vue:11-13](frontend-vue/src/components/MenuItem.vue)
-El enlace externo hace `:href="node.url"` **sin validar protocolo**; Vue no sanea `javascript:`. Un menú con `url="javascript:…"` se vuelve ejecutable al hacer clic. Inconsistencia clara: [DynamicPageView.vue:52-55](frontend-vue/src/views/DynamicPageView.vue) **sí** exige `^https?://`; `MenuItem` lo olvidó.
+**OWASP A03 · CWE-79 · Verificado.** [MenuItem.vue:11-13](../../frontend-vue/src/components/MenuItem.vue)
+El enlace externo hace `:href="node.url"` **sin validar protocolo**; Vue no sanea `javascript:`. Un menú con `url="javascript:…"` se vuelve ejecutable al hacer clic. Inconsistencia clara: [DynamicPageView.vue:52-55](../../frontend-vue/src/views/DynamicPageView.vue) **sí** exige `^https?://`; `MenuItem` lo olvidó.
 **Fix:** validar `^https?:` (o `/app/`) antes de renderizar el `<a>`, reutilizando la comprobación de `DynamicPageView`.
 
 ### 🟠 A-3 · Tokens en `localStorage` (7 días)
-**OWASP A07 · CWE-522.** [auth.service.ts:16-18](frontend-vue/src/services/auth.service.ts)
+**OWASP A07 · CWE-522.** [auth.service.ts:16-18](../../frontend-vue/src/services/auth.service.ts)
 `accessToken`+`refreshToken` en `localStorage` → cualquier XSS (p.ej. A-2) los exfiltra; el refresh vive 7 días = acceso persistente. Es el eslabón que convierte A-2 en toma de cuenta completa.
 **Fix:** mover el refresh a cookie `HttpOnly`+`Secure`+`SameSite`; mantener el access en memoria.
 
 ### 🟠 A-4 · Ruta de despliegue que evade TODOS los gates
-[.github/workflows/deploy-render-test.yml](.github/workflows/deploy-render-test.yml) (+ `deploy-frontend-test.yml`)
+[.github/workflows/deploy-render-test.yml](../../.github/workflows/deploy-render-test.yml) (+ `deploy-frontend-test.yml`)
 Push a `deploy/render-test` dispara `render deploys create --confirm --wait` **sin build, tests, Sonar ni SAST**, contra el service real. El nombre "test" engaña: toca producción y saltea el Shift-Left entero.
 **Fix:** branch protection o eliminar esos workflows; que el único camino a prod sea el pipeline con gates.
 
 ### 🟠 A-5 · Carrera en la rotación de refresh token
-[auth.service.ts:145-238](backend/src/auth/auth.service.ts)
+[auth.service.ts:145-238](../../backend/src/auth/auth.service.ts)
 Entre el `findUnique` y el `update` de revocación **no hay transacción ni bloqueo**. Dos peticiones concurrentes con el mismo token pasan ambas la comprobación de reúso (ven `revokedAt=null`) → **dos familias válidas y la detección de reúso no se dispara**.
 **Fix:** consumo atómico condicional: `updateMany(where estado=ACTIVO & revokedAt=null)` y comprobar `count===1` antes de emitir.
 
 ### 🟠 A-6 · `docker-compose.yml` (HEAD) arranca como "producción" con credenciales conocidas
-[docker-compose.yml:113,122,125](docker-compose.yml)
-`NODE_ENV: production` fijo + `${INTERNAL_API_KEY:-local-docker-internal-key}` + `${SEED_ADMIN_PASSWORD:-Admin12345!}`. El endurecimiento a `${VAR:?}` de `c0be76e` fue **revertido** en HEAD. `env.validation.ts` solo rechaza `change-me*`, no estos literales. Incluye el default débil de `INTERNAL_API_KEY` del hijo `ventas` ([server.ts:32](services/ventas/src/server.ts)).
+[docker-compose.yml:113,122,125](../../docker-compose.yml)
+`NODE_ENV: production` fijo + `${INTERNAL_API_KEY:-local-docker-internal-key}` + `${SEED_ADMIN_PASSWORD:-Admin12345!}`. El endurecimiento a `${VAR:?}` de `c0be76e` fue **revertido** en HEAD. `env.validation.ts` solo rechaza `change-me*`, no estos literales. Incluye el default débil de `INTERNAL_API_KEY` del hijo `ventas` ([server.ts:32](../../services/ventas/src/server.ts)).
 **Fix:** volver a `${VAR:?}` y ampliar `validateEnv` para rechazar también estos literales en prod.
 
 ---
@@ -206,7 +206,7 @@ Entre el `findUnique` y el `update` de revocación **no hay transacción ni bloq
 ---
 
 ## Anexos (detalle por frente)
-- [docs/auditoria/hallazgos-backend.md](docs/auditoria/hallazgos-backend.md) — cripto y autorización.
-- [docs/auditoria/hallazgos-frontend-ventas.md](docs/auditoria/hallazgos-frontend-ventas.md) — SPA y microservicio hijo.
-- [docs/auditoria/hallazgos-devsecops.md](docs/auditoria/hallazgos-devsecops.md) — CI/CD, Docker, k8s, secretos.
-- [docs/auditoria/cumplimiento-pdf.md](docs/auditoria/cumplimiento-pdf.md) — cumplimiento requisito por requisito.
+- [hallazgos-backend.md](hallazgos-backend.md) — cripto y autorización.
+- [hallazgos-frontend-ventas.md](hallazgos-frontend-ventas.md) — SPA y microservicio hijo.
+- [hallazgos-devsecops.md](hallazgos-devsecops.md) — CI/CD, Docker, k8s, secretos.
+- [cumplimiento-pdf.md](cumplimiento-pdf.md) — cumplimiento requisito por requisito.

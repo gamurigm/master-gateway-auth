@@ -109,7 +109,7 @@ Formato de cada hallazgo: **Título** | Severidad | Archivo/comando:línea | Rie
 
 ### H15. Drift de configuración y ramas
 - **Severidad:** BAJA (informativo).
-- **Evidencia:** `env.validation.ts:18-23` sólo valida 3 claves requeridas mientras `.env.example` declara ~15; `render.yaml` es de un solo servicio y `render-config.md:10` lo reconoce; la rama personal `dev-cesar` está cableada en el pipeline (`ci-cd.yml:12,31,325-337,528`) recibiendo notificación de inicio y corriendo SAST como si fuera `test` — los comentarios piden quitarla antes de integrar.
+- **Evidencia:** `env.validation.ts:18-23` sólo valida 3 claves requeridas mientras `.env.example` declara ~15; `render.yaml` es de un solo servicio y `docs/despliegue/render-config.md:10` lo reconoce; la rama personal `dev-cesar` está cableada en el pipeline (`ci-cd.yml:12,31,325-337,528`) recibiendo notificación de inicio y corriendo SAST como si fuera `test` — los comentarios piden quitarla antes de integrar.
 - **Recomendación:** Remover `dev-cesar` del workflow antes de la entrega; alinear `.env.example`/`env.validation`/`render.yaml`.
 
 ---

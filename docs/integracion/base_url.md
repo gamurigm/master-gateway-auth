@@ -8,7 +8,7 @@ Archivos a modificar (6)
 1. backend/src/menus/dto/create-menu.dto.ts
    Agregar dos campos opcionales:
    Campo Tipo Validación Descripción
-   targetUrl string? @IsOptional(), @IsString(), @MaxLength(2048), @Matches(/^https?:\/\/.+/) URL destino del microservicio (ej. <http://inventario:3007/inventario/productos>)
+   targetUrl string? @IsOptional(), @IsString(), @MaxLength(2048), @Matches(/^https?:\/\/.+/) URL destino del microservicio (ej. [http://inventario:3007/inventario/productos](http://inventario:3007/inventario/productos))
    methods string[]? @IsOptional(), @IsArray(), @ArrayMinSize(1), @IsIn(['GET','POST','PUT','PATCH','DELETE'], { each: true }) Métodos HTTP permitidos (default ['GET'])
 2. backend/src/menus/dto/update-menu.dto.ts
    Mismos campos que create, pero envolverlos en @IsOptional().
@@ -19,7 +19,7 @@ Archivos a modificar (6)
 
 - code: route<menuId></menuid> (prefijo route para distinguirlos de servicios registrados manualmente)
 - name: Ruta: <menu.name>
-- baseUrl: derivado de targetUrl (solo protocolo + host, ej. <http://inventario:3007>)
+- baseUrl: derivado de targetUrl (solo protocolo + host, ej. [http://inventario:3007](http://inventario:3007))
 - estado: ACTIVO
 
 1. Crear el Menu (como hoy)
@@ -95,7 +95,7 @@ Usuario en UI
   → Guardar
 
 Backend:
-  → Crea ExternalService oculto (code: "route<uuid></uuid>", baseUrl: "<http://inventario:3007>")
+  → Crea ExternalService oculto (code: "route<uuid></uuid>", baseUrl: "[http://inventario:3007](http://inventario:3007)")
   → Crea Menu
   → Crea ExternalServiceRoute (publicPath: "/inventario/productos", targetPath: "/inventario/productos")
   → Todo en una transacción
@@ -103,7 +103,7 @@ Backend:
 Usuario clicks en "Productos":
   → DynamicPageView llama a /api/proxy/inventario/productos
   → ServiceProxy encuentra la ExternalServiceRoute
-  → Redirige a <http://inventario:3007/inventario/productos>
+  → Redirige a [http://inventario:3007/inventario/productos](http://inventario:3007/inventario/productos)
   → Responde con los productos ✅
 Consideraciones
 

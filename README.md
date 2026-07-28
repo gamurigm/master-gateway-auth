@@ -347,6 +347,7 @@ Guia completa en `k8s/README.md`.
 xd
 ## Documentacion
 
+- `docs/README.md` - Indice de documentacion por categoria.
 - `docs/arquitectura_alto_nivel.md` - Diagrama de componentes + modelo ER.
 - `docs/diagramas-secuencia.md` - Flujos clave en diagramas de secuencia.
 - `docs/endpoints.md` - Endpoints disponibles y roles requeridos.

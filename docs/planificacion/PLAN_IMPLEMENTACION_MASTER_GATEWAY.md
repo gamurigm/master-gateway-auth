@@ -1,6 +1,9 @@
 ﻿# Plan de implementacion - Master Gateway de Autenticacion y Autorizacion
 
-Fuente base: `PROY_PARCIAL_III_DesSeguro_202650.pdf` revisado completo, incluyendo texto, tablas de endpoints y diagramas de secuencia.
+Fuente base:
+[`PROY_PARCIAL_III_DesSeguro_202650.pdf`](../requisitos/PROY_PARCIAL_III_DesSeguro_202650.pdf)
+revisado completo, incluyendo texto, tablas de endpoints y diagramas de
+secuencia.
 
 ## 1. Objetivo del proyecto
 
