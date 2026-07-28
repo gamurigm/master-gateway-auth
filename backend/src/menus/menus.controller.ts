@@ -41,6 +41,17 @@ export class MenusController {
     return this.menusService.findAll();
   }
 
+  // El formulario de edicion ya llamaba a GET /menus/:id, pero el endpoint no
+  // existia: la peticion devolvia 404 y el formulario se quedaba vacio.
+  // Declarado DESPUES de `tree` para que `/menus/tree` no se interprete como id.
+  @Get(':id')
+  @RequireRoles('ADMIN')
+  @RequirePermissions('menus:read')
+  @UseGuards(RolesGuard, PermissionsGuard, PolicyGuard)
+  findOne(@Param('id', UUIDv4) id: string) {
+    return this.menusService.findOne(id);
+  }
+
   @Post()
   @RequireRoles('ADMIN')
   @RequirePermissions('menus:write')

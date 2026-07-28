@@ -11,6 +11,7 @@ import { CreateExternalServiceDto } from './dto/create-external-service.dto';
 import { ProbeServiceDto } from './dto/probe-service.dto';
 import { ProvisionServiceDto } from './dto/provision-service.dto';
 import { UpdateExternalServiceDto } from './dto/update-external-service.dto';
+import { IMPLICIT_ROUTE_SERVICE_PREFIX } from '../menus/dto/proxy-route.constants';
 import { assertSafeProbeTarget } from './ssrf-guard';
 
 /** Tiempo maximo que se espera a un servicio externo antes de darlo por caido. */
@@ -68,7 +69,15 @@ export class ExternalServicesService {
 
   findAll() {
     return this.prisma.externalService.findMany({
-      where: { estado: Estado.ACTIVO },
+      // Los servicios con prefijo `_route_` los crea implicitamente el alta de
+      // un menu con `targetUrl`; no son servicios registrados por el usuario y
+      // no deben aparecer en este listado. Se filtra con `startsWith` de Prisma
+      // (que escapa el valor) y no con `LIKE '_route_%'`: en SQL el guion bajo
+      // es un comodin de un caracter.
+      where: {
+        estado: Estado.ACTIVO,
+        NOT: { code: { startsWith: IMPLICIT_ROUTE_SERVICE_PREFIX } },
+      },
       orderBy: { name: 'asc' },
       include: { module: true },
     });

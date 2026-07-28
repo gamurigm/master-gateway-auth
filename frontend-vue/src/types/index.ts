@@ -185,6 +185,10 @@ export interface Menu {
   updatedAt: string
   module?: SystemModule
   parent?: Menu
+  /** URL del endpoint real en el microservicio, si el menu enruta por proxy. */
+  targetUrl?: string | null
+  /** Metodos HTTP que expone la ruta de proxy. */
+  methods?: string[]
 }
 
 export interface CreateMenuDto {
@@ -194,6 +198,8 @@ export interface CreateMenuDto {
   order?: number
   moduleId: string
   parentId?: string
+  targetUrl?: string
+  methods?: string[]
 }
 
 export interface UpdateMenuDto {
@@ -203,6 +209,9 @@ export interface UpdateMenuDto {
   order?: number
   moduleId?: string
   parentId?: string
+  /** `null` desactiva el enrutado por proxy del menu. */
+  targetUrl?: string | null
+  methods?: string[]
 }
 
 export interface ExternalService {
