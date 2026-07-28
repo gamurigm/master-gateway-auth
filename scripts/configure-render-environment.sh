@@ -8,6 +8,10 @@ required=(
   INTERNAL_API_KEY
   FRONTEND_ORIGIN
   SEED_ADMIN_PASSWORD
+  # Faltaba: sin ella el seed creaba el SUPER_ADMIN de produccion con la
+  # contrasena por defecto `SuperAdmin12345!`, que esta en el repositorio.
+  SEED_SUPER_ADMIN_PASSWORD
+  SEED_DEMO_PASSWORD
 )
 
 for key in "${required[@]}"; do
@@ -58,6 +62,9 @@ put_env INTERNAL_ALLOWED_SERVICES ventas
 put_env SEED_ADMIN_EMAIL "${SEED_ADMIN_EMAIL:-admin@example.com}"
 put_env INTERNAL_API_KEY "$INTERNAL_API_KEY"
 put_env SEED_ADMIN_PASSWORD "$SEED_ADMIN_PASSWORD"
+put_env SEED_SUPER_ADMIN_EMAIL "${SEED_SUPER_ADMIN_EMAIL:-superadmin@example.com}"
+put_env SEED_SUPER_ADMIN_PASSWORD "$SEED_SUPER_ADMIN_PASSWORD"
+put_env SEED_DEMO_PASSWORD "$SEED_DEMO_PASSWORD"
 
 database_env_response="$temp_dir/database-env.json"
 database_env_status=$(curl --silent --show-error \

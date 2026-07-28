@@ -5,6 +5,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { exportJWK } from 'jose';
 import type { JWK } from 'jose';
+import { GATEWAY_TOKEN_ALGORITHM } from '../auth/gateway-token';
 
 @Injectable()
 export class KeysService implements OnModuleInit {
@@ -35,9 +36,12 @@ export class KeysService implements OnModuleInit {
 
     const publicKeyObject = createPublicKey(this.publicKey);
     const jwk = await exportJWK(publicKeyObject);
-    jwk.alg = 'RSA-OAEP-256';
+    // La clave se publica para VERIFICAR FIRMAS (`use: 'sig'`), no para cifrar.
+    // Publicarla como `use: 'enc'` era parte del fallo critico: anunciaba a
+    // quien quisiera la clave con la que se fabricaban tokens validos.
+    jwk.alg = GATEWAY_TOKEN_ALGORITHM;
     jwk.kid = 'master-gateway-v1';
-    jwk.use = 'enc';
+    jwk.use = 'sig';
 
     this.jwksCache = { keys: [jwk] };
     return this.jwksCache;

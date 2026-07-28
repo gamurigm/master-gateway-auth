@@ -18,6 +18,10 @@ reports/codebert-changed-files.txt
 __pycache__/
 .claude
 
+# Cache de npm. Se habia colado en el repositorio (366 archivos, ~134 MB): era
+# el 60% de los ficheros versionados. Es contenido regenerable.
+.npm-cache/
+
 # Claves RSA generadas en tiempo de ejecucion por KeysService. NUNCA versionar
 # la clave privada: en produccion y K8s se montan desde un Secret.
 keys/
@@ -29,3 +33,6 @@ services/
 # Secretos y claves de los overlays de Kubernetes (solo se versiona el .example).
 k8s/overlays/*/secrets.env
 k8s/overlays/*/keys/
+
+# `docs/` NO se ignora: la documentacion (arquitectura, seguridad, ADR,
+# auditorias) es parte de la entrega y debe viajar con el repositorio.

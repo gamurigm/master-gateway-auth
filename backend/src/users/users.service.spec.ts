@@ -233,7 +233,7 @@ describe('UsersService', () => {
         estado: Estado.INACTIVO,
       });
 
-      const result = await service.remove(USER_ID, ACTOR_ID, 'ADMIN');
+      const result = await service.remove(USER_ID, ACTOR_ID);
 
       expect(result).toEqual({ success: true });
       expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
@@ -257,31 +257,35 @@ describe('UsersService', () => {
       expect(prisma.user.delete).not.toHaveBeenCalled();
     });
 
-    it('physically deletes the user for SUPER_ADMIN', async () => {
+    // Regresion del §9: "Nunca se debe eliminar fisicamente un registro".
+    // Existia una rama que hacia DELETE duro cuando el actor era SUPER_ADMIN.
+    it('never deletes physically, not even for SUPER_ADMIN', async () => {
       prisma.user.findFirst.mockResolvedValue(mockUser());
-      prisma.user.delete.mockResolvedValue(mockUser());
+      prisma.user.update.mockResolvedValue({
+        ...mockUser(),
+        estado: Estado.INACTIVO,
+      });
 
-      const result = await service.remove(USER_ID, ACTOR_ID, 'SUPER_ADMIN');
+      const result = await service.remove(USER_ID, ACTOR_ID);
 
       expect(result).toEqual({ success: true });
-      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
-        where: { userId: USER_ID },
-      });
-      expect(prisma.userRole.deleteMany).toHaveBeenCalledWith({
-        where: { userId: USER_ID },
-      });
-      expect(prisma.user.delete).toHaveBeenCalledWith({
-        where: { id: USER_ID },
-      });
-      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+      expect(prisma.refreshToken.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.userRole.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: USER_ID },
+          data: expect.objectContaining({ estado: Estado.INACTIVO }),
+        }),
+      );
     });
 
     it('rejects deleting the authenticated user', async () => {
       prisma.user.findFirst.mockResolvedValue(mockUser());
 
-      await expect(
-        service.remove(ACTOR_ID, ACTOR_ID, 'SUPER_ADMIN'),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.remove(ACTOR_ID, ACTOR_ID)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
 
     it('throws NotFoundException when user is missing', async () => {

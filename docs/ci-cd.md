@@ -100,8 +100,40 @@ Variables utiles:
 El workflow `.github/workflows/ci-cd.yml` ejecuta este scanner despues de build y
 pruebas. En Pull Requests analiza archivos modificados; en `push` analiza las
 rutas principales del proyecto.
-## GitHub Actions
+## Estrategia de ramas y promocion
 
+El repositorio aplica el flujo exigido por el anexo del proyecto:
+
+```text
+feature/* -> dev -> test -> main -> deploy
+```
+
+- Las ramas de trabajo abren Pull Requests hacia `dev`.
+- Un pipeline exitoso en `dev` crea o reutiliza el PR `dev -> test` y activa auto-merge.
+- Un pipeline exitoso en `test`, incluido CodeBERT cuando aplica, crea o reutiliza el PR
+  `test -> main` y activa auto-merge.
+- Un fallo, cancelacion, conflicto o check pendiente mantiene el PR abierto y bloquea la promocion.
+- Solo el merge en `main` ejecuta SonarQube, los gates completos y el despliegue.
+
+El job `branch-flow` rechaza PRs hacia `test` que no provengan de `dev` y PRs hacia
+`main` que no provengan de `test`. El job estable `promotion-ready` agrega build, pruebas,
+self-test y escaneos aplicables para usarlo como required status check.
+
+### Configuracion requerida en GitHub
+
+1. Habilitar `Allow auto-merge` y conservar habilitado el metodo `Merge commit`.
+2. Crear un fine-grained Personal Access Token con acceso exclusivo a este repositorio y
+   permisos `Contents: Read and write` y `Pull requests: Read and write`.
+3. Guardarlo como Actions secret `BRANCH_PROMOTION_TOKEN`. Se usa un PAT dedicado porque los
+   eventos creados con `GITHUB_TOKEN` no disparan el siguiente workflow de promocion.
+4. Proteger `dev`, `test` y `main`: exigir Pull Request, exigir el check `promotion-ready`,
+   bloquear force-push y bloquear eliminacion de rama.
+5. No conceder bypass sobre `main`; el check `branch-flow` garantiza que su PR nazca de `test`.
+
+Antes de activar la primera promocion hay que sincronizar las ramas historicamente divergentes.
+Una vez alineadas, todo cambio nuevo debe entrar por una rama creada desde `dev`.
+
+## GitHub Actions
 El workflow `.github/workflows/ci-cd.yml` ejecuta:
 
 - Prisma validate.
@@ -118,12 +150,13 @@ El runner levanta temporalmente `sonar-db` y `sonarqube:community`, genera un
 token de analisis y destruye los contenedores al finalizar. Por eso este job no
 requiere `SONAR_TOKEN` ni `SONAR_HOST_URL` en GitHub Secrets.
 
-Secrets necesarios para la notificacion:
+Secrets necesarios para CI/CD:
 
 | Tipo | Nombre | Valor |
 | --- | --- | --- |
 | Secret | `TELEGRAM_BOT_TOKEN` | Token del bot |
 | Secret | `TELEGRAM_CHAT_ID` | ID del chat destino |
+| Secret | `BRANCH_PROMOTION_TOKEN` | PAT dedicado para crear y fusionar PRs de promocion |
 
 La instancia del runner es efimera: sirve para bloquear el despliegue por el
 Quality Gate actual, pero no conserva historial entre ejecuciones. Para mantener
@@ -147,4 +180,3 @@ esa aplicacion al repositorio si se quiere que deje de aparecer en los PR.
 - SonarQube Community Build con Docker: https://docs.sonarsource.com/sonarqube-community-build/server-installation/from-docker-image/set-up-and-start-container
 - SonarScanner for NPM: https://docs.sonarsource.com/sonarqube-server/analyzing-source-code/scanners/npm/using
 - Imagen oficial Docker: https://hub.docker.com/_/sonarqube
-

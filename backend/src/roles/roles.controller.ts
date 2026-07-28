@@ -12,8 +12,11 @@ import {
 import type { AuthenticatedUser } from '../common/auth/authenticated-user';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../common/auth/jwt-auth.guard';
+import { RequirePermissions } from '../common/auth/permissions.decorator';
+import { PermissionsGuard } from '../common/auth/permissions.guard';
 import { RequireRoles } from '../common/auth/roles.decorator';
 import { RolesGuard } from '../common/auth/roles.guard';
+import { PolicyGuard } from '../common/policy/policy.guard';
 import { AssignMenuDto } from './dto/assign-menu.dto';
 import { AssignModuleDto } from './dto/assign-module.dto';
 import { AssignPermissionDto } from './dto/assign-permission.dto';
@@ -25,27 +28,31 @@ import { RolesService } from './roles.service';
 const UUIDv4 = new ParseUUIDPipe({ version: '4' });
 
 @RequireRoles('ADMIN')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard, PolicyGuard)
 @Controller('roles')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
   @Get()
+  @RequirePermissions('roles:read')
   findAll() {
     return this.rolesService.findAll();
   }
 
   @Get(':id')
+  @RequirePermissions('roles:read')
   findOne(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.rolesService.findOne(id);
   }
 
   @Post()
+  @RequirePermissions('roles:create')
   create(@Body() dto: CreateRoleDto, @CurrentUser() user: AuthenticatedUser) {
     return this.rolesService.create(dto, user.sub, user.roleName);
   }
 
   @Put(':id')
+  @RequirePermissions('roles:write')
   update(
     @Param('id', UUIDv4) id: string,
     @Body() dto: UpdateRoleDto,
@@ -55,6 +62,7 @@ export class RolesController {
   }
 
   @Delete(':id')
+  @RequirePermissions('roles:delete')
   remove(
     @Param('id', UUIDv4) id: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -63,6 +71,7 @@ export class RolesController {
   }
 
   @Post(':id/users')
+  @RequirePermissions('roles:assign_user')
   assignUser(
     @Param('id', UUIDv4) id: string,
     @Body() dto: AssignUserDto,
@@ -77,6 +86,7 @@ export class RolesController {
   }
 
   @Delete(':id/users/:userId')
+  @RequirePermissions('roles:unassign_user')
   unassignUser(
     @Param('id', UUIDv4) id: string,
     @Param('userId', UUIDv4) userId: string,
@@ -86,6 +96,7 @@ export class RolesController {
   }
 
   @Post(':id/modules')
+  @RequirePermissions('roles:write')
   assignModule(
     @Param('id', UUIDv4) id: string,
     @Body() dto: AssignModuleDto,
@@ -100,6 +111,7 @@ export class RolesController {
   }
 
   @Post(':id/menus')
+  @RequirePermissions('roles:write')
   assignMenu(
     @Param('id', UUIDv4) id: string,
     @Body() dto: AssignMenuDto,
@@ -114,6 +126,7 @@ export class RolesController {
   }
 
   @Delete(':id/modules/:moduleId')
+  @RequirePermissions('roles:write')
   unassignModule(
     @Param('id', UUIDv4) id: string,
     @Param('moduleId', UUIDv4) moduleId: string,
@@ -128,6 +141,7 @@ export class RolesController {
   }
 
   @Delete(':id/menus/:menuId')
+  @RequirePermissions('roles:write')
   unassignMenu(
     @Param('id', UUIDv4) id: string,
     @Param('menuId', UUIDv4) menuId: string,
@@ -137,6 +151,7 @@ export class RolesController {
   }
 
   @Post(':id/permissions')
+  @RequirePermissions('roles:assign_permission')
   assignPermission(
     @Param('id', UUIDv4) id: string,
     @Body() dto: AssignPermissionDto,
@@ -152,6 +167,7 @@ export class RolesController {
   }
 
   @Delete(':id/permissions/:permissionId')
+  @RequirePermissions('roles:unassign_permission')
   unassignPermission(
     @Param('id', UUIDv4) id: string,
     @Param('permissionId', UUIDv4) permissionId: string,

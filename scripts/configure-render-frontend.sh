@@ -9,8 +9,12 @@ api_url="https://api.render.com/v1"
 auth_header="Authorization: Bearer $RENDER_API_KEY"
 frontend_name="master-gateway-frontend"
 frontend_branch="deploy/frontend-test"
-build_command="npm ci --include=dev && npm run configure:frontend && npm run build:frontend"
-publish_path="frontend/dist/frontend/browser"
+# El frontend es Vue + Vite (`frontend-vue`), no el Angular legado. La ruta de
+# publicacion anterior (`frontend/dist/frontend/browser`) era la salida de
+# Angular y ya no existe. Vite lee `VITE_API_URL` del entorno en tiempo de
+# build, asi que tampoco hace falta generar un fichero de entorno previo.
+build_command="npm ci --include=dev && npm run build:frontend"
+publish_path="frontend-vue/dist"
 temp_dir="$(mktemp -d)"
 trap 'rm -rf "$temp_dir"' EXIT
 
@@ -55,7 +59,7 @@ if [[ -z "$frontend_id" ]]; then
       branch: $branch,
       autoDeploy: "no",
       rootDir: "",
-      envVars: [{key: "FRONTEND_API_URL", value: $apiUrl}],
+      envVars: [{key: "VITE_API_URL", value: $apiUrl}],
       serviceDetails: {
         buildCommand: $buildCommand,
         publishPath: $publishPath,
@@ -125,7 +129,7 @@ curl --fail --silent --show-error \
   --header "$auth_header" \
   --header "Content-Type: application/json" \
   --data-binary "@$frontend_env_payload" \
-  "$api_url/services/$frontend_id/env-vars/FRONTEND_API_URL" >/dev/null
+  "$api_url/services/$frontend_id/env-vars/VITE_API_URL" >/dev/null
 
 routes_payload="$temp_dir/routes.json"
 jq -n '[{type: "rewrite", source: "/*", destination: "/index.html"}]' > "$routes_payload"

@@ -180,6 +180,60 @@ ul { list-style: none; padding: 0; margin: 0; }
   margin-bottom: 20px;
 }
 
+/* Bloque opcional del formulario de menus para enrutar a un microservicio. */
+.proxy-section {
+  border-top: 1px solid var(--secondary-hover);
+  margin-top: 8px;
+  padding-top: 20px;
+}
+
+.proxy-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0 0 6px;
+}
+
+.help {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.help code {
+  background: var(--secondary-bg);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+/* Los checkboxes no deben heredar el `width: 100%` de `.field input`. */
+.checkbox-item input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+
 .field label {
   font-weight: 600;
   font-size: 13px;
@@ -204,6 +258,58 @@ ul { list-style: none; padding: 0; margin: 0; }
   background: #ffffff;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+}
+
+.proxy-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 16px;
+}
+
+.proxy-section h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #1d4ed8;
+}
+
+.help {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.checkbox-group label:hover {
+  border-color: #93c5fd;
+  background: #f8faff;
+}
+
+.checkbox-group input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
 }
 
 .password-wrapper {

@@ -7,8 +7,17 @@ import {
 import { Reflector } from '@nestjs/core';
 import { PolicyService } from './policy.service';
 import { POLICY_ACTION_KEY } from './policy.decorator';
+import { REQUIRED_PERMISSIONS_KEY } from '../auth/permissions.decorator';
 import type { RequestWithUser } from '../auth/request-with-user';
 
+/**
+ * Consulta el motor de politicas (OPA) cuando esta configurado.
+ *
+ * Se aplica DESPUES de `PermissionsGuard`, de modo que OPA solo puede
+ * restringir mas, nunca conceder lo que el RBAC local ya nego. Si `OPA_URL` no
+ * esta definido el guard no interviene; si esta definido y OPA falla, deniega
+ * (ver `PolicyService`).
+ */
 @Injectable()
 export class PolicyGuard implements CanActivate {
   constructor(
@@ -22,29 +31,40 @@ export class PolicyGuard implements CanActivate {
       resource: string;
     } | null>(POLICY_ACTION_KEY, [context.getHandler(), context.getClass()]);
 
-    const action = policyMeta?.action ?? this.inferAction(context);
+    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
+      REQUIRED_PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    const action =
+      policyMeta?.action ??
+      requiredPermissions?.[0] ??
+      this.inferAction(context);
     const resource = policyMeta?.resource ?? '';
 
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const user = request.user;
 
+    // Fail-closed: antes un request sin usuario devolvia `true` y se saltaba la
+    // politica entera.
     if (!user) {
-      return true;
+      throw new ForbiddenException('Usuario autenticado requerido');
     }
 
-    const result = await this.policyService.evaluate({
+    const decision = await this.policyService.evaluate({
       subject: {
         user_id: user.sub,
         role_id: user.roleId,
         role_name: user.roleName,
-        permissions: [],
+        // Los permisos reales del token. Antes se enviaba `[]` siempre, con lo
+        // que la politica rego no podia evaluar `has_permission` de forma util.
+        permissions: user.permissions ?? [],
       },
       action,
       resource,
     });
 
-    if (!result.allow) {
-      throw new ForbiddenException('Política denegó la operación');
+    if (decision.engine === 'opa' && !decision.allow) {
+      throw new ForbiddenException('Politica denego la operacion');
     }
 
     return true;
