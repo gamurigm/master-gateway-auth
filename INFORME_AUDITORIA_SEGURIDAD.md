@@ -5,6 +5,40 @@
 
 ---
 
+## 0. Estado de remediación (2026-07-27, rama `main`)
+
+Segunda pasada sobre `main` (`14244a9`). Se reverificó cada hallazgo y se corrigieron los siguientes.
+
+### Corregido y verificado
+
+| # | Hallazgo | Cómo se cerró | Prueba que lo fija |
+|---|---|---|---|
+| **C-1** | Forjado de tokens (bypass total) | Los tokens se **firman** con JWS **RS256** (clave privada) en vez de cifrarse con la pública. JWKS pasa a `use:"sig"`. | `jwt-auth.guard.spec.ts`: rechaza JWE forjado y JWS de otra clave |
+| **M-3** | Refresh servía como access | Claim `token_use` verificado en cada guard | `jwt-auth.guard.spec.ts`, `auth.service.spec.ts` |
+| **M-1 / §6.2** | Permisos decorativos: autorización solo por nombre de rol | Permisos del rol **firmados en el token** + `PermissionsGuard` que los exige por endpoint | `permissions.guard.spec.ts` (6 casos), e2e "rejects an admin whose token lacks users:read" |
+| — | **OPA fail-open** (nuevo): las 3 rutas de error devolvían `allow:true`, y `PolicyGuard` era código muerto | `PolicyService` distingue `disabled` de `allow` y **deniega** ante cualquier fallo; `PolicyGuard` cableado en los 5 controladores | `policy.service.spec.ts` (5 casos) |
+| — | **Borrado físico de usuarios** (regresión de `14244a9`, viola §9) | `remove()` es soft delete siempre, sin rama por rol | `users.service.spec.ts`: "never deletes physically, not even for SUPER_ADMIN" |
+| **A-5** | Carrera en la rotación de refresh | Consumo **atómico** vía `updateMany` condicional + `count === 1` | `auth.service.spec.ts`: "rejects a token already consumed concurrently" |
+| **A-2** | XSS almacenado por `:href` de menú | `utils/safe-url.ts` compartido; solo `/app/*` y `http(s)://` se enlazan | — |
+| **A-4** | Ramas de deploy que evaden los gates | `deploy-*-test.yml` pasan a `workflow_dispatch` con motivo obligatorio | — |
+| **A-6** | `docker-compose` con credenciales por defecto | `${VAR:?}`, `NODE_ENV` ya no fijo a `production`, Kong Admin API solo en `127.0.0.1` | — |
+| **M-8** | `GITHUB_TOKEN` con permisos amplios | `permissions: contents: read` en los 3 workflows | — |
+| — | `validateEnv` solo rechazaba `change-me*` | Rechaza los literales filtrados y exige `FRONTEND_ORIGIN` en producción | `env.validation.spec.ts` (5 casos nuevos) |
+| — | **Higiene** (nuevo): `.npm-cache/` versionado (366 archivos, 60% del repo); `docs/` en `.gitignore`; `npm run build`/`test`/`lint` rotos; backend sirviendo estáticos desde `frontend/dist` (inexistente) | Corregidos | — |
+
+**Verificación:** 120 unitarias + 9 e2e en verde, lint sin errores, self-test SAST 16/16, y el PoC de forjado ahora es rechazado con las claves reales del repo.
+
+### Pendiente (requiere acción humana o queda fuera de alcance del código)
+
+- **C-2 · Rotar los 6 secretos filtrados** en GitHub Secrets y Render, y purgar el historial. **Es la única acción bloqueante que queda** y no puede hacerse desde el código: hay que rotarlos en las consolas. Empezar por `INTERNAL_API_KEY`.
+- **A-1** · SSRF por TOCTOU en el probe (requiere fijar la conexión a la IP validada).
+- **A-3** · Tokens en `localStorage` (mover el refresh a cookie `HttpOnly` toca todo el flujo de sesión).
+- **M-2, M-4..M-7, M-9..M-13** y la lista de bajos.
+
+> Nota sobre OPA: `OPA_URL` **no** se define en Render a propósito. Con el motor apagado manda el RBAC local (`PermissionsGuard`), que siempre se aplica; apuntar la variable a un OPA inexistente haría que todo devolviera 403 por el nuevo fail-closed.
+
+---
+
 ## 1. Veredicto ejecutivo
 
 El proyecto es **funcionalmente muy completo y ambicioso**: cubre los 5 objetivos específicos, la totalidad de los ~23 endpoints mínimos, el estándar de auditoría/soft-delete (incluidas las 3 tablas pivote), el flujo Zero Trust con un microservicio hijo real, y todo el anexo DevSecOps (pipeline con gates que **sí** bloquean el deploy, SAST propio con self-test, Kubernetes endurecido, Telegram). En cumplimiento formal del enunciado, está **por encima de lo pedido**.
