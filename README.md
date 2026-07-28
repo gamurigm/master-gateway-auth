@@ -14,33 +14,49 @@ Microservicio maestro full-stack que centraliza autenticacion, autorizacion basa
 | Seguridad     | JWE (RSA-OAEP-256 + A256GCM), Argon2id, Guards, DTO Validation, OPA, Helmet |
 | Infra         | Docker, Kubernetes (Kustomize), GitHub Actions, SonarQube Community         |
 
-## Comenzar
+## Inicio rapido con Docker
 
 ```bash
-# 1. Instalar dependencias
-npm install
-
-# 2. Copiar variables de entorno
+# Solo la primera vez: crea el archivo local y completa sus 3 secretos
 cp .env.example .env
 
-# 3. Levantar base de datos
-docker compose up -d postgres
-
-# 4. Migration y seed
-npm run prisma:migrate
-npm run prisma:seed
-
-# 5. Iniciar backend
-npm run dev:backend
-
-# 6. Iniciar frontend
-npm run dev:frontend
+# Construye y levanta todo el sistema
+docker compose up --build -d
 ```
 
-Si Docker corre dentro de WSL desde Windows:
+No es necesario ejecutar `npm install`, `npm run build`, las migraciones ni el
+seed por separado. Docker Compose construye el backend y el frontend; al
+arrancar, el backend espera a PostgreSQL, aplica las migraciones pendientes y
+ejecuta el seed idempotente antes de aceptar peticiones.
 
-```powershell
-wsl -e docker compose up -d postgres
+Abre `http://localhost:4201` cuando los contenedores estén saludables. En los
+siguientes arranques basta con `docker compose up -d`; vuelve a usar
+`docker compose up --build -d` cuando cambie el código o las dependencias.
+
+> Si Docker está instalado dentro de WSL, abre una terminal de tu distribución
+> Linux y ejecuta allí estos comandos de forma nativa. No antepongas `wsl` a
+> cada comando.
+
+### Restablecer toda la configuracion de seguridad
+
+El seed normal no sobrescribe cambios realizados desde la interfaz. Para
+reinicializar explícitamente los usuarios, roles, módulos, menús, sesiones y
+permisos con los valores bootstrap:
+
+```bash
+docker compose exec -e SEED_RESET=true backend node backend/dist/prisma/seed.js
+```
+
+> **Advertencia:** este comando elimina primero toda la configuración de
+> seguridad, incluidos usuarios y roles creados desde la interfaz. No elimina
+> el volumen de PostgreSQL ni datos de otros dominios, pero úsalo únicamente
+> cuando realmente quieras volver al estado inicial del seed.
+
+Para ver el estado o detener el sistema:
+
+```bash
+docker compose ps
+docker compose down
 ```
 
 ### Puertos
@@ -49,7 +65,7 @@ wsl -e docker compose up -d postgres
 | ------------------------- | ---------- | --------------------- |
 | Backend (Master)          | `3000`     | `3000`                |
 | Frontend Vue (SPA)        | `4200`     | `4201`                |
-| PostgreSQL                | —          | `5443` → `5432`       |
+| PostgreSQL                | —          | `5442` → `5432`       |
 | SonarQube                 | —          | `9000`                |
 
 Vite sirve el SPA en `4200` y proxya `/api` hacia el backend en `http://127.0.0.1:3000`.
@@ -292,21 +308,20 @@ Crea 4 usuarios bootstrap, roles, modulos y menus iniciales.
 | `demo@example.com`       | `Demo12345!`       | USER        |
 | `ventas@example.com`     | `Demo12345!`       | VENTAS      |
 
-## Probar en local
+## Desarrollo local sin contenerizar la aplicacion
 
 ```bash
-# 1. Base de datos
+# 1. Base de datos en Docker
 docker compose up -d postgres
 
-# 2. Migraciones + seed
+# 2. Dependencias, migraciones y seed
+npm install
 npm run prisma:migrate
 npm run prisma:seed
 
-# 3. Backend
-npm run dev:backend        # http://localhost:3000
-
-# 4. Frontend
-npm run dev:frontend       # http://localhost:4200
+# 3. Backend y frontend (en terminales separadas)
+npm run dev:backend
+npm run dev:frontend
 ```
 
 Abre `http://localhost:4200`, inicia sesion con `admin@example.com` / `Admin12345!` y selecciona el rol.
@@ -328,12 +343,10 @@ npm run test:e2e -w backend
 
 ## CodeBERT SAST
 
-```powershell
-wsl sh -lc 'docker compose --profile security build codebert-sast'
-wsl sh -lc 'docker compose --profile security run --rm codebert-sast'
-```
-
 ```bash
+docker compose --profile security build codebert-sast
+docker compose --profile security run --rm codebert-sast
+
 npm run sast:selftest    # 16/16 casos
 npm run sast:rules       # escaneo con reglas
 ```

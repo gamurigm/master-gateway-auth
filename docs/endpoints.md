@@ -20,7 +20,7 @@ Requieren `Authorization: Bearer <accessToken>`. `SUPER_ADMIN` pasa cualquier en
 | Metodo   | Ruta                                   | Rol                   | Uso                                                                                         |
 | -------- | -------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------- |
 | `POST`   | `/auth/logout`                         | Autenticado           | Revoca refresh token                                                                        |
-| `GET`    | `/menus/tree`                          | Autenticado           | Devuelve menu dinamico del rol activo                                                       |
+| `GET`    | `/menus/tree`                          | Autenticado           | Devuelve menu dinamico del rol activo; `ADMIN` y `SUPER_ADMIN` reciben todos los modulos y menus activos                                                       |
 | `GET`    | `/users`                               | `ADMIN`               | Lista usuarios activos                                                                      |
 | `POST`   | `/users`                               | `ADMIN`               | Crea usuario                                                                                |
 | `PUT`    | `/users/:id`                           | `ADMIN`               | Actualiza usuario                                                                           |

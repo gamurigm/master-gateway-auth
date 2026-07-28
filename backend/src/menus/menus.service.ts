@@ -31,6 +31,8 @@ export type MenuTreeNode = {
   children: MenuTreeNode[];
 };
 
+const FULL_ACCESS_ROLE_NAMES = new Set(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN']);
+
 @Injectable()
 export class MenusService {
   constructor(private readonly prisma: PrismaService) {}
@@ -90,23 +92,35 @@ export class MenusService {
     };
   }
 
-  async treeForRole(roleId: string) {
-    const roleMenus = await this.prisma.roleMenu.findMany({
-      where: {
-        roleId,
-        estado: Estado.ACTIVO,
-        role: { estado: Estado.ACTIVO },
-        menu: {
-          estado: Estado.ACTIVO,
-          module: {
-            estado: Estado.ACTIVO,
-            roles: { some: { roleId, estado: Estado.ACTIVO } },
-          },
-        },
-      },
-      include: { menu: { include: { module: true } } },
-      orderBy: { menu: { order: 'asc' } },
-    });
+  async treeForRole(roleId: string, roleName?: string) {
+    const roleMenus =
+      roleName && FULL_ACCESS_ROLE_NAMES.has(roleName)
+        ? (
+            await this.prisma.menu.findMany({
+              where: {
+                estado: Estado.ACTIVO,
+                module: { estado: Estado.ACTIVO },
+              },
+              include: { module: true },
+              orderBy: [{ order: 'asc' }, { name: 'asc' }],
+            })
+          ).map((menu) => ({ menu }))
+        : await this.prisma.roleMenu.findMany({
+            where: {
+              roleId,
+              estado: Estado.ACTIVO,
+              role: { estado: Estado.ACTIVO },
+              menu: {
+                estado: Estado.ACTIVO,
+                module: {
+                  estado: Estado.ACTIVO,
+                  roles: { some: { roleId, estado: Estado.ACTIVO } },
+                },
+              },
+            },
+            include: { menu: { include: { module: true } } },
+            orderBy: { menu: { order: 'asc' } },
+          });
 
     const modules = new Map<
       string,
