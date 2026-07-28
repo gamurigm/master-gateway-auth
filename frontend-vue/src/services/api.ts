@@ -1,8 +1,17 @@
 import axios from 'axios'
 import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 
+// Por defecto `/api` relativo, que es lo correcto cuando el SPA y el backend
+// comparten origen: en desarrollo lo resuelve el proxy de Vite y en el
+// contenedor lo proxya nginx.
+//
+// `VITE_API_URL` permite apuntar a un backend en OTRO origen, que es el caso de
+// un sitio estatico (Render): alli `/api` chocaria con la regla de reescritura
+// `/* -> /index.html` del SPA y toda llamada devolveria el HTML en vez de JSON.
+const baseURL = import.meta.env.VITE_API_URL || '/api'
+
 const api: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL,
   headers: { 'Content-Type': 'application/json' },
 })
 

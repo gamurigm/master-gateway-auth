@@ -16,7 +16,6 @@
         "build": "npm run prisma:generate && npm run build:backend && npm run build:frontend",
         "build:backend": "npm run build -w backend",
         "build:frontend": "npm run build -w frontend-vue",
-        "configure:frontend": "node scripts/configure-frontend-environment.mjs",
         "start:backend:prod": "npm run prisma:deploy -w backend && node backend/dist/prisma/seed.js && npm run start:prod -w backend",
         "deploy": "node scripts/deploy.js",
         "lint": "npm run lint -w backend && npm run lint -w frontend-vue",
