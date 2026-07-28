@@ -95,6 +95,29 @@ describe('ServiceProxyService', () => {
     expect(prisma.roleMenu.count).not.toHaveBeenCalled();
   });
 
+  it.each(['SUPER_ADMIN', 'SUPERADMIN', 'ADMIN'])(
+    'permite acceso global al proxy para el rol %s',
+    async (roleName) => {
+      await expect(
+        service.forward(createRequest(roleName)),
+      ).resolves.toMatchObject({ statusCode: 200 });
+      expect(prisma.roleMenu.count).not.toHaveBeenCalled();
+    },
+  );
+
+  it('una configuracion adicional no puede retirar acceso a ADMIN', async () => {
+    service = new ServiceProxyService(
+      prisma as unknown as PrismaService,
+      new ConfigService({ FULL_ACCESS_ROLE_NAMES: 'AUDITOR' }),
+      new ServiceIdentityService(),
+    );
+
+    await expect(
+      service.forward(createRequest('ADMIN')),
+    ).resolves.toMatchObject({ statusCode: 200 });
+    expect(prisma.roleMenu.count).not.toHaveBeenCalled();
+  });
+
   it('bloquea roles normales sin item asignado antes de contactar al micro', async () => {
     await expect(service.forward(createRequest('USER'))).rejects.toBeInstanceOf(
       ForbiddenException,

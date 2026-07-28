@@ -220,12 +220,15 @@ export class ServiceProxyService {
 
   private hasFullAccess(roleName: string) {
     const configured = this.configService.get<string>('FULL_ACCESS_ROLE_NAMES');
-    const roles = configured
-      ? configured
-          .split(',')
-          .map((role) => role.trim())
-          .filter(Boolean)
-      : FULL_ACCESS_ROLE_NAMES;
+    const roles = [
+      ...FULL_ACCESS_ROLE_NAMES,
+      ...(configured
+        ? configured
+            .split(',')
+            .map((role) => role.trim())
+            .filter(Boolean)
+        : []),
+    ];
     return roles.includes(roleName);
   }
 

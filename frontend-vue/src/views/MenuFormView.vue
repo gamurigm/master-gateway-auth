@@ -60,20 +60,25 @@
           </select>
         </div>
 
-        <div
-          v-if="showProxyFields"
-          class="proxy-section"
-        >
+        <div class="proxy-section">
           <h3>Proxy a microservicio</h3>
           <p class="help">
             Opcional. Si indicas una URL destino, el Gateway enrutara
             <code>{{ proxyPublicPath }}</code> hacia ese microservicio.
             Dejalo vacio si el menu es solo navegacion.
           </p>
+          <p
+            v-if="!showProxyFields"
+            class="help"
+          >
+            Para habilitar el proxy, la Ruta (URL) debe empezar por
+            <code>/app/</code>.
+          </p>
           <div class="field">
             <label>URL destino</label>
             <input
               v-model="form.targetUrl"
+              :disabled="!showProxyFields"
               placeholder="http://inventario:3007/inventario/productos"
             >
           </div>
