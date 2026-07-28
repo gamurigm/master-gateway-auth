@@ -233,12 +233,12 @@ services:
       - .:/workspace
       - codebert-cache:/cache/huggingface
     command:
+      # `frontend/src` era el Angular legado, ya retirado: el agente escaneaba
+      # una ruta inexistente y dejaba el frontend real sin analizar.
       - --path
       - backend/src
       - --path
-      - frontend/src
-      - --path
-      - services
+      - frontend-vue/src
       - --report
       - reports/codebert-sast.json
 
