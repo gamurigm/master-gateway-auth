@@ -48,6 +48,11 @@ añade al log de GitHub Actions el `errorMessage` del despliegue y hasta 200 log
 recientes del servicio. El binario de Render CLI se valida con el checksum
 SHA-256 publicado para la versión utilizada.
 
+El arranque ejecuta `backend/prisma/deploy-migrations.cjs`. Este script solo
+recupera el fallo conocido `P3009` de la migración duplicada
+`20260728051029_add_service_api_key`: la marca como revertida y vuelve a ejecutar
+`prisma migrate deploy`. Cualquier otra migración fallida detiene el despliegue.
+
 ## Saneamiento único de datos demo
 
 El seed es idempotente y elimina los menús legacy con UUID `000...`; todos los
